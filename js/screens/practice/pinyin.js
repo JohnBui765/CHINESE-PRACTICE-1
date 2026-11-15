@@ -4,6 +4,7 @@
 // tones separately: right letters with wrong tones is "close" (orange), not right.
 import { h } from '../../ui/dom.js';
 import { textField, iconButton } from '../../ui/components.js';
+import { keepVisible } from '../../ui/viewport.js';
 import { gradePinyin, applyToneToLast } from '../../core/pinyincheck.js';
 import { pinyinLabel } from '../../core/lists.js';
 import { sizeClass } from './recall.js';
@@ -29,9 +30,12 @@ export function render(card, ctx) {
     onInput: (v) => ctx.setReady(v.trim().length > 0),
     onEnter: () => ctx.submit(),
   });
+  // Once the keyboard is up, bring the field (and the characters above it) into view.
+  field.addEventListener('focus', () => keepVisible(field));
 
   // Keys that change the field without dropping the keyboard: the mousedown is cancelled so
-  // focus stays in the field (the cloze word bank of Vocab Studio does the same).
+  // focus stays in the field (the cloze word bank of Vocab Studio does the same). The bar
+  // lives in the footer, above Check, which the app keeps above the iOS keyboard.
   const key = (label, name, apply) =>
     h(
       'button',
@@ -64,9 +68,10 @@ export function render(card, ctx) {
     h('div', { class: ['py-word', 'kai', sizeClass(item.word)], lang: 'zh' }, item.word),
     settings.showPrint ? h('div', { class: 'rc-print print', lang: 'zh' }, item.word) : null,
     field,
-    bar,
     answer,
   );
+  if (ctx.setFooterExtra) ctx.setFooterExtra(bar);
+  else el.insertBefore(bar, answer);
 
   function showAnswer(ok) {
     field.readOnly = true;

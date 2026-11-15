@@ -65,8 +65,9 @@ characters listed under them) or **All**. Then pick a mode:
   and you pick the right word among four from the same lesson. The wrong ones are chosen to be
   confusable: words that share a character, then words of the same length.
 - **Type the pinyin**: the characters are shown and you type the pinyin. Type the letters
-  (nihao), then tap a tone key under the field: **ā á ǎ à** put the tone on the last syllable
-  you typed, **a** takes it off, **ü** types ü. Tone numbers work too (ni3hao3), and so do v or
+  (nihao), then tap a tone key in the bar just above **Check** (it stays above the keyboard):
+  **ā á ǎ à** put the tone on the last syllable you typed, **a** takes it off, **ü** types ü.
+  While the keyboard is up the card shrinks so the word, the field and the bar all fit. Tone numbers work too (ni3hao3), and so do v or
   u: for ü. **Check** grades the letters and the tones separately: right letters with wrong or
   missing tones is orange, not right. Both the dictionary pinyin and the pinyin as said in the
   word (yǒu → you) are accepted. In Settings, **Tones must be right** can be turned off while

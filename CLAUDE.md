@@ -85,9 +85,14 @@ app can be copied to the other:
   typed wrong tones still count; the dictionary pinyin and the pinyin as said are both accepted;
   儿 forms (nǎr / nar3 / nǎ ér) and a missing apostrophe (xi an) are handled.
 - Mode `pinyin` (`js/screens/practice/pinyin.js`): entries with pinyin and ≤ 6 characters
-  (`canTypePinyin`); a text field with `answer` attributes, Enter checks; the tone bar keys
-  cancel mousedown so the keyboard stays up; after Check the field turns green or red and the
-  answer with a speaker appears.
+  (`canTypePinyin`); a text field with `answer` attributes, Enter (the keyboard's Done) checks;
+  the tone bar is placed in the practice footer above Check through `ctx.setFooterExtra(node)`
+  (practice.js hides the strip once the card is answered), so it stays above the iOS keyboard;
+  its keys cancel mousedown so the keyboard stays up, and the Check button gives focus back to
+  the field inside the tap. While the keyboard is open (`html.kb-open` from viewport.js) the
+  card is compact: smaller characters, no label, no print form; the field scrolls into view on
+  focus (`keepVisible`). After Check the field turns green or red and the answer with a speaker
+  appears under it.
 - `js/core/choose.js` (pure): `chooseOptions(entries, entry, { count: 4, rng, pool })` → ids,
   the right one in a random place; words sharing a character first, then the same length; the
   same text never twice; sentences over 6 characters never offered. Mode `choose`

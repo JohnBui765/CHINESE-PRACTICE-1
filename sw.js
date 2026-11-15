@@ -5,7 +5,7 @@
 // cache of this app is named "chinese-practice-1-<VERSION>", it is opened by name (never
 // caches.match(), which searches every app's caches), and on activate only caches that start
 // with "chinese-practice-1-" are deleted. Other apps' caches are never touched.
-const VERSION = '12ffe6bcdb';
+const VERSION = 'dbca45afb6';
 const PRECACHE = [
   './',
   'css/app.css',

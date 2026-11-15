@@ -410,25 +410,49 @@
 }
 .py .field.right { border-color: var(--green); }
 .py .field.wrong { border-color: var(--red); }
+/* The tone bar sits in the practice footer, above Check, so it stays above the keyboard. */
+.pf-extra {
+  max-width: 640px;
+  margin: 0 auto 10px;
+}
 .py-tones {
   display: flex;
-  flex-wrap: wrap;
   gap: 6px;
   justify-content: center;
-  margin-top: 10px;
 }
 .py-tone {
-  min-width: 46px;
-  height: 44px;
-  padding: 0 8px;
+  flex: 1 1 0;
+  min-width: 0;
+  height: 46px;
+  padding: 0 4px;
   border: 0;
   border-radius: 10px;
   background: var(--fill);
   color: var(--label);
-  font: 600 20px var(--font);
+  font: 600 22px var(--font);
   cursor: pointer;
 }
 .py-tone:active { background: var(--fill-2); }
+
+/* With the keyboard up only a third of the screen is left: smaller characters, no label, no
+   print form, so the word, the field, the tone bar and Check all fit. */
+html.kb-open .py .rc-front-label,
+html.kb-open .py .rc-print {
+  display: none;
+}
+html.kb-open .py {
+  padding: 10px 14px 14px;
+}
+html.kb-open .py .py-word {
+  margin: 0;
+  font-size: min(60px, 14vw);
+}
+html.kb-open .py .field {
+  margin-top: 10px;
+}
+html.kb-open .practice-stage {
+  padding-top: 8px;
+}
 .py-answer {
   display: flex;
   flex-wrap: wrap;

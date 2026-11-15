@@ -99,14 +99,17 @@ export default async function create(params) {
   const fbTitle = h('div', { class: 'pf-title' });
   const fbDetail = h('div', { class: 'pf-detail' });
   const feedback = h('div', { class: 'pf-feedback', 'aria-live': 'polite' }, fbIcon, h('div', { class: 'pf-text' }, fbTitle, fbDetail));
-  const primary = button({ label: 'Show answer', size: 'large', block: true, onTap: () => (session ? onPrimary() : pop()) });
+  const primary = button({ label: 'Show answer', size: 'large', block: true, onTap: () => (session ? onPrimaryTap() : pop()) });
   const primaryLabel = primary.querySelector('span');
   const timerBar = h('div', { class: 'pf-timer' });
   primary.appendChild(timerBar);
   const knewBtn = button({ label: 'Knew it', variant: 'success', size: 'large', block: true, icon: 'check', onTap: () => grade(true) });
   const forgotBtn = button({ label: "Didn't know", variant: 'destructive', size: 'large', block: true, icon: 'close', onTap: () => grade(false) });
   const gradeRow = h('div', { class: 'pf-grade' }, forgotBtn, knewBtn);
-  const footer = h('footer', { class: 'practice-footer', dataset: { state: 'idle' } }, feedback, h('div', { class: 'pf-actions' }, primary, gradeRow));
+  // A mode may put a strip above the buttons (the pinyin tone bar): the footer stays above the
+  // iOS keyboard, so the strip is always reachable while typing.
+  const extraHost = h('div', { class: 'pf-extra', hidden: true });
+  const footer = h('footer', { class: 'practice-footer', dataset: { state: 'idle' } }, feedback, extraHost, h('div', { class: 'pf-actions' }, primary, gradeRow));
 
   const el = h('section', { class: 'screen practice' }, top, scroller, footer);
 
@@ -196,6 +199,11 @@ export default async function create(params) {
         if (state !== 'idle') return;
         setState('grade');
       },
+      setFooterExtra: (node) => {
+        if (node) extraHost.replaceChildren(node);
+        else extraHost.replaceChildren();
+        extraHost.hidden = !node;
+      },
     };
   }
 
@@ -238,6 +246,8 @@ export default async function create(params) {
     const item = list.entries.find((e) => e.id === card.itemId);
     if (current?.destroy) current.destroy();
     setState('idle');
+    extraHost.replaceChildren();
+    extraHost.hidden = true;
     const renderer = RENDERERS[card.type] || recall;
     current = renderer.render(card, makeCtx(card, list, item));
     setPrimary(current.primaryLabel || 'Show answer', { ready: !!current.readyInitially });
@@ -252,6 +262,7 @@ export default async function create(params) {
     const fb = result.feedback || {};
     const title = result.correct ? fb.title || (result.hinted ? 'Correct — with a hint' : PRAISE[Math.floor(Math.random() * PRAISE.length)]) : fb.title || 'Not quite';
     setState(result.correct ? 'right' : result.close ? 'close' : 'wrong', { title, detail: fb.detail });
+    extraHost.hidden = true; // the strip (tone bar) is done; Continue moves down to the thumb
     if (!Object.keys(session.outcomes).length) pausedSave = commitPausedSession(session.id);
     answer(session, result);
     // Save as soon as the last card is answered: iOS may close the app before Continue is tapped.
@@ -277,6 +288,28 @@ export default async function create(params) {
     } else if (answered()) {
       next();
     }
+  }
+
+  // The footer button must not take focus from a typing field: the iOS keyboard would drop on
+  // Check and come back on Continue. Desktop: cancel the mousedown; iOS: put focus back inside
+  // the tap, before the card handles it.
+  const typingField = () => {
+    const a = document.activeElement;
+    return a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA') && stage.contains(a) ? a : null;
+  };
+  let fieldAtTap = null;
+  primary.addEventListener('pointerdown', () => {
+    fieldAtTap = typingField();
+  });
+  primary.addEventListener('mousedown', (e) => {
+    if (typingField()) e.preventDefault();
+  });
+
+  function onPrimaryTap() {
+    const field = fieldAtTap;
+    fieldAtTap = null;
+    if (field && field.isConnected && document.activeElement !== field) field.focus({ preventScroll: true });
+    onPrimary();
   }
 
   function next() {
