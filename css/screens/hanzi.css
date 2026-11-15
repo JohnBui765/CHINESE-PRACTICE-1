@@ -1,0 +1,300 @@
+/* Hanzi Drill: the two Chinese fonts and the Chinese-specific pieces (recall cards, entry rows,
+   the list page, the import screen). Everything else comes from the shared design system. */
+
+@font-face {
+  font-family: 'Hanzi Kai';
+  src: url('../../fonts/ukai-cn.ttf') format('truetype');
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Hanzi Print';
+  src: url('../../fonts/noto-sans-sc.ttf') format('truetype');
+  font-display: swap;
+}
+
+/* KaiTi 楷体: the handwriting shape. Print 黑体: the shape on screens and phones. */
+.kai {
+  font-family: 'Hanzi Kai', 'Kaiti SC', 'STKaiti', 'AR PL UKai CN', 'KaiTi', serif;
+  font-weight: 400;
+}
+.print {
+  font-family: 'Hanzi Print', 'PingFang SC', 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
+  font-weight: 400;
+}
+
+/* ---------- recall card (reuses the flip card of mode-flashcard.css) ---------- */
+
+.rc-word {
+  max-width: 100%;
+  line-height: 1.15;
+  letter-spacing: 0.04em;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.rc-len-1 { font-size: 112px; }
+.rc-len-2 { font-size: 76px; }
+.rc-len-3 { font-size: 52px; }
+.rc-len-4 { font-size: 36px; }
+
+.rc-print {
+  font-size: 24px;
+  line-height: 1.2;
+  letter-spacing: 0.08em;
+  color: var(--label-2);
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.rc-front-label {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--label-3);
+}
+
+.rc-pinyin {
+  font-size: 30px;
+  line-height: 1.25;
+  font-weight: 600;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.rc-said { color: var(--accent); }
+
+.rc-meaning {
+  font-size: 21px;
+  line-height: 1.3;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.rc-back-word {
+  font-size: 52px;
+  line-height: 1.1;
+  letter-spacing: 0.04em;
+  overflow-wrap: anywhere;
+}
+.rc-back-print {
+  font-size: 18px;
+  color: var(--label-2);
+  letter-spacing: 0.06em;
+}
+.fc-back .rc-pinyin,
+.fc-back .rc-meaning {
+  text-align: left;
+}
+.rc-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 14px;
+  margin-top: 8px;
+}
+
+.rc-block {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 0.5px solid var(--separator);
+}
+.rc-block-label {
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--label-3);
+}
+.rc-example-zh {
+  font-size: 28px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.rc-ul {
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-decoration-color: var(--accent);
+  text-underline-offset: 6px;
+}
+.rc-example-py {
+  margin-top: 2px;
+  font-size: 16px;
+  color: var(--label-2);
+}
+.rc-example-en {
+  margin-top: 2px;
+  font-size: 16px;
+}
+.rc-parts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.rc-part {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 64px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: var(--fill);
+}
+.rc-part-zh { font-size: 30px; line-height: 1.1; }
+.rc-part-py { font-size: 13px; color: var(--label-2); }
+.rc-part-mean {
+  max-width: 120px;
+  font-size: 12px;
+  color: var(--label-3);
+  text-align: center;
+}
+.rc-unsure {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--orange-text);
+}
+
+/* ---------- entry rows (list page, import preview) ---------- */
+
+.ent .row-title { display: block; }
+.ent-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+}
+.ent-zh {
+  font-size: 30px;
+  line-height: 1.15;
+  letter-spacing: 0.03em;
+}
+.ent-print {
+  font-size: 15px;
+  color: var(--label-3);
+}
+.ent-py { font-size: 16px; }
+.ent-mean {
+  display: block;
+  font-size: 15px;
+  color: var(--label-2);
+}
+.ent-ex {
+  display: block;
+  margin-top: 3px;
+  font-size: 14px;
+  color: var(--label-2);
+}
+.ent-ex .kai {
+  font-size: 19px;
+  color: var(--label);
+}
+.ent-status {
+  display: block;
+  margin-top: 3px;
+  font-size: 13px;
+  color: var(--label-3);
+}
+.ent-status.due { color: var(--orange-text); }
+.ent-warn {
+  display: block;
+  margin-top: 3px;
+  font-size: 13px;
+  color: var(--orange-text);
+}
+.ent-warn.red { color: var(--red-text); }
+.ent-part .row-main {
+  padding-left: 12px;
+  border-left: 2px solid var(--fill-2);
+}
+.ent-part .ent-zh { font-size: 24px; }
+.ent-part2 .row-main { margin-left: 22px; }
+
+/* A sentence is long: smaller characters so it fits. */
+.ent-sentence .ent-zh { font-size: 22px; }
+
+/* ---------- list page ---------- */
+
+.ld-stages {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0 0 16px;
+}
+.ld-stage {
+  padding: 10px 6px;
+  border-radius: var(--radius-lg);
+  background: var(--card);
+  box-shadow: var(--shadow-card);
+  text-align: center;
+}
+.ld-stage-value {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+.ld-stage-label {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--label-2);
+}
+.ld-scope {
+  padding: 10px 16px 12px;
+}
+.ld-scope-title {
+  margin-bottom: 8px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+/* The entry sheet: the word large, then its details. */
+.es-word {
+  font-size: 88px;
+  line-height: 1.1;
+  text-align: center;
+  letter-spacing: 0.04em;
+  overflow-wrap: anywhere;
+}
+.es-print {
+  margin-top: 4px;
+  font-size: 22px;
+  color: var(--label-2);
+  text-align: center;
+  letter-spacing: 0.08em;
+}
+.es-body { padding: 4px 4px 12px; }
+
+/* ---------- import screen ---------- */
+
+.imp-actions {
+  display: flex;
+  gap: 10px;
+  margin: 0 0 12px;
+}
+.imp-actions .btn { flex: 1; }
+.imp-text {
+  min-height: 190px;
+  font-size: 16px;
+  line-height: 1.4;
+}
+.imp-label {
+  display: block;
+  margin: 16px 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--label-2);
+}
+.imp-notice {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--accent-tint);
+  color: var(--accent-on-tint);
+  font-size: 15px;
+  line-height: 1.35;
+}
+.imp-notice.warn {
+  background: rgba(255, 149, 0, 0.16);
+  color: var(--orange-text);
+}
+.imp-preview { margin-top: 16px; }

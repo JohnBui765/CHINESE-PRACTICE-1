@@ -1,0 +1,205 @@
+// Settings tab: practice options, appearance, backup, help.
+import { h } from '../ui/dom.js';
+import { icon } from '../ui/icons.js';
+import { screen, section, row, segmented, toggle, sheet, actionSheet, confirm, toast } from '../ui/components.js';
+import { saveFile, pickFile } from '../ui/files.js';
+import { resetTo } from '../ui/router.js';
+import * as store from '../data/store.js';
+import { SCOPES } from './practice/session.js';
+
+export const VERSION = '0.1';
+
+const AUTO_ADVANCE = [
+  { value: 0, label: 'Off' },
+  { value: 1, label: '1 second' },
+  { value: 2, label: '2 seconds' },
+  { value: 3, label: '3 seconds' },
+  { value: 5, label: '5 seconds' },
+];
+const REVIEW_LIMIT = [10, 20, 30, 50].map((n) => ({ value: n, label: `${n} cards` }));
+
+const labelOf = (options, value) => options.find((o) => o.value === value)?.label ?? String(value);
+
+function controlRow(title, control, subtitle) {
+  return h(
+    'div',
+    { class: 'row settings-control' },
+    h('span', { class: 'row-main' }, h('span', { class: 'row-title', style: { display: 'block' } }, title), subtitle ? h('span', { class: 'row-subtitle', style: { display: 'block' } }, subtitle) : null),
+    control,
+  );
+}
+
+function stackedRow(title, control) {
+  return h('div', { class: 'row settings-stacked' }, h('div', { class: 'row-title' }, title), control);
+}
+
+function formatBytes(n) {
+  if (!n) return '0 KB';
+  if (n < 1024 * 1024) return `${Math.max(1, Math.round(n / 1024))} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+async function exportBackup() {
+  const data = await store.exportAll();
+  const json = JSON.stringify(data, null, 1);
+  const d = new Date();
+  const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  await saveFile(new Blob([json], { type: 'application/json' }), `hanzi-drill-backup-${date}.json`);
+}
+
+async function importBackup() {
+  const file = await pickFile('application/json,.json');
+  if (!file) return;
+  let data;
+  try {
+    data = JSON.parse(await file.text());
+    store.validateBackup(data);
+  } catch (err) {
+    toast(err.message && !/JSON/.test(err.message) ? err.message : 'That file is not a valid backup.', { icon: 'xCircle', tone: 'red', duration: 3500 });
+    return;
+  }
+  const count = data.lists.filter(store.isListRecord).length;
+  const mode = await actionSheet({
+    title: `Restore ${count} ${count === 1 ? 'list' : 'lists'}?`,
+    message: 'Merge keeps your current lists and adds anything newer from the backup. Replace deletes what is on this phone first.',
+    actions: [
+      { label: 'Merge with my lists', value: 'merge' },
+      { label: 'Replace everything', value: 'replace', style: 'destructive' },
+    ],
+  });
+  if (!mode) return;
+  if (mode === 'replace' && !(await confirm({ title: 'Replace all data?', message: 'Lists and progress on this phone will be deleted.', confirmLabel: 'Replace', destructive: true }))) return;
+  try {
+    const res = await store.importAll(data, { mode });
+    await resetTo('settings');
+    toast(`Restored ${res.lists} ${res.lists === 1 ? 'list' : 'lists'}`);
+  } catch (err) {
+    toast(err.message || 'Could not restore the backup.', { icon: 'xCircle', tone: 'red', duration: 3500 });
+  }
+}
+
+function infoSheet(title, paragraphs) {
+  sheet({
+    title,
+    content: h(
+      'div',
+      { class: 'settings-help' },
+      paragraphs.map((p) => (Array.isArray(p) ? h('ol', null, p.map((li) => h('li', null, li))) : typeof p === 'string' ? h('p', null, p) : p)),
+    ),
+  });
+}
+
+function installHelp() {
+  infoSheet('Install on iPhone', [
+    'Hanzi Drill works like a normal app once it is on your Home Screen: full screen, offline, and it keeps your lists.',
+    [
+      h('span', null, 'Open this page in ', h('strong', null, 'Safari'), '.'),
+      h('span', null, 'Tap the ', h('strong', null, 'Share'), ' button ', icon('share', { size: 16, className: 'inline-icon' }), ' in the toolbar.'),
+      h('span', null, 'Scroll down and tap ', h('strong', null, 'Add to Home Screen'), '.'),
+      h('span', null, 'Tap ', h('strong', null, 'Add'), '. Open it from the new icon.'),
+    ],
+    'Your lists are stored only on this phone. Use Export backup now and then to keep a copy in Files or iCloud Drive.',
+  ]);
+}
+
+function listsHelp() {
+  infoSheet('Where lists come from', [
+    'A list is a lesson in the format Hanzi Grid saves: one line per word with its pinyin and meaning, the characters of the word on "> " lines under it, and an example sentence on a "= " line.',
+    [
+      'In Hanzi Grid, check a lesson and tap Save list. The .txt file goes to Files.',
+      'Here, tap + on the Lists tab, then Open file… and pick that file. Or paste the text.',
+      'Check the preview and tap Save.',
+    ],
+    'Pasting an AI reply to a Hanzi Grid prompt works too: the same reader is used.',
+  ]);
+}
+
+export default async function create() {
+  const st = store.settings();
+
+  // A choice opens a sheet of options with a checkmark on the current one.
+  const choiceRow = (title, key, options, { subtitle, sheetTitle = title, sheetFooter } = {}) => {
+    const detail = h('span', null, labelOf(options, store.settings()[key]));
+    let open = null;
+    return row({
+      title,
+      subtitle,
+      detail,
+      onTap: () => {
+        if (open) return;
+        const current = store.settings()[key];
+        const optionRow = (o) =>
+          row({
+            title: o.label,
+            accessory: h('span', { class: 'check-mark' }, o.value === current ? icon('check') : null),
+            onTap: async () => {
+              if (!open) return;
+              const sh = open;
+              open = null;
+              await store.setSetting(key, o.value);
+              detail.textContent = labelOf(options, o.value);
+              sh.close();
+            },
+          });
+        open = sheet({
+          title: sheetTitle,
+          content: section({ footer: sheetFooter, children: options.map(optionRow) }),
+          onClose: () => {
+            open = null;
+          },
+        });
+      },
+    });
+  };
+
+  const set = (key) => (value) => store.setSetting(key, value);
+
+  const storageRowDetail = h('span', null, '…');
+  store.storageStatus().then((x) => {
+    storageRowDetail.textContent = x.durable ? `${formatBytes(x.usage)}${x.persistent ? ' · protected' : ''}` : 'Temporary';
+    if (!x.durable) storageRowDetail.classList.add('settings-warn');
+  });
+
+  const body = [
+    section({
+      header: 'Practice',
+      footer: 'Words: the words and sentences of a list. Characters: the characters listed under them.',
+      children: [
+        stackedRow('What to practise', segmented({ options: SCOPES, value: st.scope, onChange: set('scope'), ariaLabel: 'What to practise' })),
+        choiceRow('Cards per review', 'reviewLimit', REVIEW_LIMIT),
+        choiceRow('Continue after grading', 'autoAdvance', AUTO_ADVANCE, { sheetTitle: 'Auto-continue', sheetFooter: 'After you grade a card, go to the next one on its own after this long.' }),
+        controlRow('Show the print form', toggle({ checked: st.showPrint, onChange: set('showPrint'), label: 'Show the print form' }), 'The screen shape 黑体 under the handwriting shape 楷体'),
+      ],
+    }),
+    section({
+      header: 'Appearance',
+      children: [stackedRow('Theme', segmented({ options: [{ value: 'system', label: 'System' }, { value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }], value: st.theme, onChange: set('theme') }))],
+    }),
+    section({
+      header: 'Backup',
+      footer: 'Your lists live only on this phone. Export a backup to Files or iCloud Drive now and then.',
+      children: [
+        row({ icon: 'upload', iconBg: 'var(--blue)', title: 'Export backup', onTap: () => exportBackup().catch((err) => { console.error(err); toast('Could not save the backup.', { icon: 'xCircle', tone: 'red' }); }) }),
+        row({ icon: 'download', iconBg: 'var(--green)', title: 'Restore from backup', onTap: () => importBackup() }),
+        row({
+          icon: 'info',
+          iconBg: store.isPersistentStorage() ? 'var(--gray)' : 'var(--red)',
+          title: 'Storage',
+          subtitle: store.isPersistentStorage() ? null : 'Unavailable: lists are lost when the app closes',
+          detail: storageRowDetail,
+        }),
+      ],
+    }),
+    section({
+      header: 'Help',
+      children: [
+        row({ icon: 'phone', iconBg: 'var(--accent)', title: 'Install on iPhone', onTap: installHelp }),
+        row({ icon: 'book', iconBg: 'var(--orange)', title: 'Where lists come from', onTap: listsHelp }),
+      ],
+    }),
+    h('p', { class: 'settings-version' }, `Hanzi Drill ${VERSION}`),
+  ];
+
+  const s = screen({ title: 'Settings', tab: 'settings', body });
+  return { el: s.el, title: 'Settings' };
+}

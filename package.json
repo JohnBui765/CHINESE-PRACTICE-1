@@ -1,0 +1,18 @@
+{
+  "name": "chinese-practice-1",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Hanzi Drill: practise the Chinese words and sentences you have learnt. iPhone-first PWA, works offline. Dev tools only; the app itself needs no install.",
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/unit/*.test.js",
+    "serve": "node tools/serve.mjs",
+    "e2e": "node tests/e2e/flows.mjs",
+    "sw": "node tools/update-sw.mjs",
+    "icons": "node tools/make-icons.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.63.0"
+  },
+  "license": "MIT"
+}
