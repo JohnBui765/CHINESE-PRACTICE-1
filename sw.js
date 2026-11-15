@@ -5,7 +5,7 @@
 // cache of this app is named "chinese-practice-1-<VERSION>", it is opened by name (never
 // caches.match(), which searches every app's caches), and on activate only caches that start
 // with "chinese-practice-1-" are deleted. Other apps' caches are never touched.
-const VERSION = 'd329d2bd40';
+const VERSION = '12ffe6bcdb';
 const PRECACHE = [
   './',
   'css/app.css',
@@ -107,10 +107,12 @@ const PRECACHE = [
   'icons/maskable-512.png',
   'index.html',
   'js/app.js',
+  'js/core/choose.js',
   'js/core/extract.js',
   'js/core/listedit.js',
   'js/core/lists.js',
   'js/core/pinyin.js',
+  'js/core/pinyincheck.js',
   'js/core/srs.js',
   'js/core/strokes.js',
   'js/core/text.js',
@@ -124,6 +126,8 @@ const PRECACHE = [
   'js/screens/index.js',
   'js/screens/list-detail.js',
   'js/screens/lists.js',
+  'js/screens/practice/choose.js',
+  'js/screens/practice/pinyin.js',
   'js/screens/practice/practice.js',
   'js/screens/practice/recall.js',
   'js/screens/practice/results.js',
@@ -137,6 +141,7 @@ const PRECACHE = [
   'js/ui/files.js',
   'js/ui/icons.js',
   'js/ui/router.js',
+  'js/ui/speech.js',
   'js/ui/strokes.js',
   'js/ui/viewport.js',
   'manifest.webmanifest',

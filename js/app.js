@@ -3,6 +3,7 @@ import * as router from './ui/router.js';
 import { initViewport } from './ui/viewport.js';
 import { openDatabase, loadSettings, settings, onChange } from './data/store.js';
 import { charSets } from './data/chars.js';
+import { chineseVoices, unlock as unlockSpeech } from './ui/speech.js';
 import { toast } from './ui/components.js';
 import { registerScreens } from './screens/index.js';
 import { recoverSnapshot } from './screens/practice/session.js';
@@ -78,6 +79,8 @@ async function boot() {
   initViewport();
   // An empty touchstart listener makes :active styles work on iOS.
   document.addEventListener('touchstart', () => {}, { passive: true });
+  // iOS allows speech only after a tap: the first tap anywhere unlocks it.
+  window.addEventListener('pointerup', () => unlockSpeech(), { once: true, capture: true });
 
   await openDatabase();
   await loadSettings();
@@ -87,6 +90,7 @@ async function boot() {
     if (store === 'all') applyTheme(settings().theme);
   });
   charSets(); // start loading the character lists; the screens await them when needed
+  chineseVoices(); // start loading the voice list
 
   registerScreens(router.register);
   const app = document.getElementById('app');

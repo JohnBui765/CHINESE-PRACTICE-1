@@ -110,6 +110,67 @@ try {
   await page.getByRole('button', { name: 'Close' }).last().click();
   await page.waitForTimeout(400);
 
+  // 4d. Pick the characters: the tile that matches the pinyin shown is the right one.
+  const lesson = new Map(); // dictionary pinyin -> word, from the Bài 7 fixture
+  for (const line of text.split(/\r?\n/)) {
+    const m = line.match(/^(?:>\s*)?([^|=#>\s][^|]*?)\s*\|\s*([^|]*?)\s*(?:\||$)/);
+    if (m) lesson.set(m[2].split('→')[0].trim(), m[1].trim());
+  }
+  await page.getByText('Pick the characters').first().click();
+  await page.locator('.ch').waitFor();
+  await idle();
+  const shownPinyin = (await page.locator('.ch .rc-pinyin').first().textContent()).split('→')[0].trim();
+  const wanted = lesson.get(shownPinyin);
+  assert.ok(wanted, `the pinyin ${shownPinyin} is in the lesson`);
+  await page.screenshot({ path: shot('11-choose.png') });
+  await page.locator('.ch-tile', { hasText: wanted }).first().click();
+  await page.locator('.practice-footer[data-state="right"]').waitFor();
+  await page.waitForTimeout(400);
+  await page.getByRole('button', { name: 'End practice' }).click();
+  await page.getByRole('button', { name: 'End session' }).click();
+  await page.getByRole('button', { name: 'Done' }).click();
+  await idle();
+
+  // 4e. Type the pinyin: letters from the keyboard, tones from the tone bar.
+  const { splitPinyin } = await import('../../js/core/pinyin.js');
+  const { syllableParts } = await import('../../js/core/pinyincheck.js');
+  const byWord = new Map([...lesson].map(([p, w]) => [w, p]));
+  await page.getByText('Type the pinyin').first().click();
+  await page.locator('.py').waitFor();
+  await idle();
+  const typeCard = async (useBar) => {
+    const word = (await page.locator('.py-word').textContent()).trim();
+    const expected = byWord.get(word);
+    assert.ok(expected, `${word} is in the lesson`);
+    const field = page.locator('.py .field');
+    await field.click();
+    if (useBar) {
+      const chars = [...word].filter((c) => /[一-鿿]/.test(c)).join('');
+      const syllables = splitPinyin(expected, chars);
+      assert.ok(syllables, `${expected} can be cut`);
+      for (const s of syllables) {
+        const { base, tone } = syllableParts(s);
+        await page.keyboard.type(base.replace(/ü/g, 'v'));
+        const names = { 1: 'first tone', 2: 'second tone', 3: 'third tone', 4: 'fourth tone', 5: 'neutral tone' };
+        if (tone !== 5) await page.getByRole('button', { name: names[tone] }).click();
+      }
+    } else {
+      await field.fill(expected);
+    }
+    await page.getByRole('button', { name: 'Check' }).click();
+    await page.locator('.practice-footer[data-state="right"]').waitFor();
+    await page.waitForTimeout(400);
+  };
+  await typeCard(true);
+  await page.screenshot({ path: shot('12-pinyin.png') });
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await page.waitForTimeout(600);
+  await typeCard(false);
+  await page.getByRole('button', { name: 'End practice' }).click();
+  await page.getByRole('button', { name: 'End session' }).click();
+  await page.getByRole('button', { name: 'Done' }).click();
+  await idle();
+
   // 4c. The writing mode: draw every stroke of the first card along the data's medians.
   await page.getByText('Write the characters').first().click();
   await page.locator('.wr').waitFor();
@@ -152,6 +213,19 @@ try {
   await page.locator('.nav-back').first().click();
   await idle();
   await page.getByText('2 lists').waitFor();
+
+  // 4f. Settings: the pronunciation section exists and the voice sheet opens without voices.
+  await page.locator('.screen:not(.covered) .tabbar').getByText('Settings').click();
+  await idle();
+  await page.getByText('Pronunciation').waitFor();
+  await page.getByText('Tones must be right').waitFor();
+  await page.getByText('Test voice').click();
+  await page.locator('.row', { hasText: 'Voice' }).first().click();
+  await page.getByText('Automatic').waitFor();
+  await page.getByRole('button', { name: 'Close' }).last().click();
+  await page.waitForTimeout(400);
+  await page.locator('.screen:not(.covered) .tabbar').getByText('Lists').click();
+  await idle();
 
   // 5. Manifest id, service worker cache prefix, other apps' caches, offline.
   const manifest = await (await fetch(`${BASE}manifest.webmanifest`)).json();

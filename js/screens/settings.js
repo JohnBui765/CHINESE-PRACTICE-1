@@ -1,13 +1,17 @@
 // Settings tab: practice options, appearance, backup, help.
 import { h } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
-import { screen, section, row, segmented, toggle, sheet, actionSheet, confirm, toast } from '../ui/components.js';
+import { screen, section, row, segmented, toggle, slider, sheet, actionSheet, confirm, toast } from '../ui/components.js';
 import { saveFile, pickFile } from '../ui/files.js';
 import { resetTo } from '../ui/router.js';
+import { chineseVoices, allVoicesRaw, speak, supported as speechSupported, voiceQuality, voiceName, voiceRegion, currentVoice, QUALITY_LABEL, isChinese } from '../ui/speech.js';
+import { copyText } from '../ui/clipboard.js';
 import * as store from '../data/store.js';
 import { SCOPES } from './practice/session.js';
 
-export const VERSION = '0.1';
+export const VERSION = '0.3';
+
+const TEST_SENTENCE = '你好！我想喝水。';
 
 const AUTO_ADVANCE = [
   { value: 0, label: 'Off' },
@@ -113,6 +117,79 @@ function installHelp() {
   ]);
 }
 
+// Voices can take up to 1.5 s to load on a cold start: ignore taps meanwhile.
+let voiceSheetOpening = false;
+async function voiceSheet(onPicked) {
+  if (voiceSheetOpening) return;
+  voiceSheetOpening = true;
+  let voices;
+  try {
+    voices = await chineseVoices();
+  } finally {
+    voiceSheetOpening = false;
+  }
+  const current = store.settings().voiceURI;
+  let s;
+  const pick = async (uri) => {
+    await store.setSetting('voiceURI', uri);
+    onPicked();
+    s.close();
+  };
+  const preview = (v) => speak(TEST_SENTENCE, { voiceURI: v ? v.voiceURI : '', rate: store.settings().speechRate });
+  const describe = (v) => `${QUALITY_LABEL[voiceQuality(v)]} · ${voiceRegion(v)}`;
+  const auto = currentVoice('');
+  const voiceRow = (v) =>
+    row({
+      title: v ? voiceName(v) : 'Automatic',
+      subtitle: v ? describe(v) : auto ? `Best on this device: ${voiceName(auto)} · ${QUALITY_LABEL[voiceQuality(auto)]}` : 'Picks the clearest Mandarin voice',
+      accessory: (v ? v.voiceURI : '') === current ? h('span', { class: 'check-mark' }, icon('check')) : h('span', { class: 'check-mark' }),
+      onTap: () => {
+        preview(v);
+        pick(v ? v.voiceURI : '');
+      },
+    });
+  const best = voices.filter((v) => voiceQuality(v) === 'premium' || voiceQuality(v) === 'enhanced');
+  const standard = voices.filter((v) => voiceQuality(v) === 'default');
+  const howTo = 'Download one in iPhone Settings › Accessibility › Spoken Content › Voices › Chinese (a voice marked Enhanced or Premium, e.g. Li-mu or Yu-shu). Then close Hanzi Drill completely (swipe it away in the app switcher) and open it again so it can see the new voice.';
+  s = sheet({
+    title: 'Voice',
+    content: [
+      section({ children: [voiceRow(null)] }),
+      best.length
+        ? section({ header: 'Best quality', footer: 'Enhanced and Premium voices sound much more natural and work offline.', children: best.map(voiceRow) })
+        : section({ header: 'Best quality', children: [h('div', { class: 'row voice-empty' }, h('span', { class: 'row-main' }, h('span', { class: 'row-title', style: { display: 'block' } }, 'No Enhanced or Premium Chinese voice found'), h('span', { class: 'row-subtitle', style: { display: 'block' } }, howTo)))] }),
+      standard.length ? section({ header: 'Standard', footer: best.length ? 'Standard voices are the small built-in ones and sound flat.' : null, children: standard.map(voiceRow) }) : null,
+      section({ children: [row({ title: 'Every voice this device shares', subtitle: 'The raw list, all languages, for troubleshooting', onTap: () => voiceDiagnostics() })] }),
+      !voices.length ? h('p', { class: 'muted small', style: { padding: '0 16px' } }, 'No Chinese voice was found on this device.') : null,
+    ],
+  });
+}
+
+// Shows exactly what speechSynthesis.getVoices() returns, unfiltered, with a Copy button.
+async function voiceDiagnostics() {
+  const raw = await allVoicesRaw();
+  const chinese = raw.filter((v) => isChinese(v.lang));
+  const standalone = navigator.standalone === true || matchMedia('(display-mode: standalone)').matches;
+  const report = [
+    'Hanzi Drill voice report',
+    `Voices reported: ${raw.length} (Chinese: ${chinese.length})`,
+    `Home Screen app: ${standalone ? 'yes' : 'no'}`,
+    `Browser: ${navigator.userAgent}`,
+    '',
+    ...raw.map((v) => `${v.name} | ${v.lang} | ${v.voiceURI}${v.localService ? '' : ' | online'}${v.default ? ' | default' : ''}`),
+  ].join('\n');
+  const voiceLine = (v) => row({ title: v.name, subtitle: `${v.lang} · ${v.voiceURI}`, detail: QUALITY_LABEL[voiceQuality(v)], accessory: 'none' });
+  sheet({
+    title: 'Every voice',
+    right: { label: 'Copy', strong: true, onTap: async () => toast((await copyText(report)) ? 'Voice list copied' : 'Could not copy', { icon: 'copy', tone: 'accent' }) },
+    content: [
+      h('p', { class: 'muted small', style: { margin: '0 4px 14px' } }, `The browser gave the app ${raw.length} voices (${chinese.length} Chinese). A voice missing here cannot be reached from a web app.`),
+      chinese.length ? section({ header: 'Chinese', children: chinese.map(voiceLine) }) : null,
+      raw.length > chinese.length ? section({ header: 'Other languages', children: raw.filter((v) => !chinese.includes(v)).map(voiceLine) }) : null,
+    ],
+  });
+}
+
 function listsHelp() {
   infoSheet('Where lists come from', [
     'A list is a lesson in the format Hanzi Grid saves: one line per word with its pinyin and meaning, the characters of the word on "> " lines under it, and an example sentence on a "= " line.',
@@ -127,6 +204,14 @@ function listsHelp() {
 
 export default async function create() {
   const st = store.settings();
+  const voiceDetail = h('span', null, 'Automatic');
+  const refreshVoiceName = async () => {
+    const uri = store.settings().voiceURI;
+    await chineseVoices();
+    const v = currentVoice(uri);
+    voiceDetail.textContent = v ? `${uri ? '' : 'Auto · '}${voiceName(v)}${voiceQuality(v) === 'default' ? '' : ` (${QUALITY_LABEL[voiceQuality(v)]})`}` : 'None found';
+  };
+  refreshVoiceName();
 
   // A choice opens a sheet of options with a checkmark on the current one.
   const choiceRow = (title, key, options, { subtitle, sheetTitle = title, sheetFooter } = {}) => {
@@ -180,6 +265,40 @@ export default async function create() {
         choiceRow('Cards per review', 'reviewLimit', REVIEW_LIMIT),
         choiceRow('Continue after grading', 'autoAdvance', AUTO_ADVANCE, { sheetTitle: 'Auto-continue', sheetFooter: 'After you grade a card, go to the next one on its own after this long.' }),
         controlRow('Show the print form', toggle({ checked: st.showPrint, onChange: set('showPrint'), label: 'Show the print form' }), 'The screen shape 黑体 under the handwriting shape 楷体'),
+      ],
+    }),
+    section({
+      header: 'Typed pinyin',
+      footer: 'With tones off, the letters alone count as right; tones you do type are still checked.',
+      children: [controlRow('Tones must be right', toggle({ checked: st.pinyinTones, onChange: set('pinyinTones'), label: 'Tones must be right' }))],
+    }),
+    section({
+      header: 'Pronunciation',
+      footer: speechSupported ? 'The voices are the iPhone\'s own, so they work offline.' : 'Speech is not available in this browser.',
+      children: [
+        row({ title: 'Voice', detail: voiceDetail, onTap: () => voiceSheet(refreshVoiceName) }),
+        stackedRow(
+          'Speed',
+          slider({
+            min: 0.5,
+            max: 1.2,
+            step: 0.05,
+            value: st.speechRate,
+            format: (v) => `${Math.round(v * 100)}%`,
+            onChange: (v) => {
+              store.setSetting('speechRate', v);
+              speak('明天', { rate: v, voiceURI: store.settings().voiceURI });
+            },
+            ariaLabel: 'Speech speed',
+          }),
+        ),
+        controlRow('Say the word with the answer', toggle({ checked: st.autoSpeak, onChange: set('autoSpeak'), label: 'Say the word with the answer' })),
+        row({
+          title: 'Test voice',
+          accent: true,
+          accessory: h('span', { class: 'row-chevron' }, icon('speaker')),
+          onTap: () => speak(TEST_SENTENCE, { rate: store.settings().speechRate, voiceURI: store.settings().voiceURI }),
+        }),
       ],
     }),
     section({

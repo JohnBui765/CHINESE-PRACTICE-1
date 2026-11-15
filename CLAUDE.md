@@ -49,11 +49,50 @@ app can be copied to the other:
 - From **Hanzi Grid**: `js/core/extract.js` (the lesson and reply reader), `js/core/pinyin.js`,
   `js/core/listedit.js`, `data/common3500.txt`, `data/font-chars.txt`, `fonts/` (the two subset
   fonts, licences), `prompts/`, their tests and fixtures. Unchanged.
-- New here: `js/core/{lists,strokes}.js`, `js/data/{chars,sample,strokes}.js`,
-  `js/ui/{files,strokes}.js`, `js/screens/{import,list-detail}.js`,
-  `js/screens/practice/{recall,write}.js`, `css/screens/hanzi.css`,
-  `tools/{update-sw,make-icons,make-strokes}.mjs`, `icons/`, `data/strokes/`, the tests in
-  `tests/unit/{lists,session,strokes}.test.js` and `tests/e2e/flows.mjs`.
+- New here: `js/core/{lists,strokes,pinyincheck,choose}.js`, `js/data/{chars,sample,strokes}.js`,
+  `js/ui/{files,strokes}.js`, `js/ui/speech.js` (Vocab Studio's, pointed at Chinese voices),
+  `js/screens/{import,list-detail}.js`, `js/screens/practice/{recall,write,pinyin,choose}.js`,
+  `css/screens/hanzi.css`, `tools/{update-sw,make-icons,make-strokes}.mjs`, `icons/`,
+  `data/strokes/`, the tests in `tests/unit/{lists,session,strokes,pinyincheck,choose,speech}.test.js`
+  and `tests/e2e/flows.mjs`.
+
+## Pronunciation
+
+- `js/ui/speech.js`: the Web Speech API with the device's **Chinese** voices (`zh`, `cmn`,
+  `yue` language tags), offline on iPhone. `speak(text, { rate, voiceURI })` is synchronous and
+  must be called inside a tap handler (iOS); the first tap anywhere calls `unlock()` (app.js).
+  Voices are ranked Premium > Enhanced > Standard (read from the voice id, Apple reuses names),
+  then by a preferred-name list (Tingting, Li-mu, Yushu, Xiaoxiao, Meijia, Sinji…), then
+  mainland Mandarin > Taiwan > Cantonese. `bestVoice(voices, savedURI)` upgrades a saved basic
+  voice to its downloaded copy. The app always speaks **characters**, never pinyin.
+- Speakers: the front of a recall card only when the characters are the question (hearing the
+  word gives away the pinyin), the back of every recall card, example sentences, the entry
+  sheet, the Strokes sheet, the pick-the-characters prompt, after a typed-pinyin answer, the
+  results rows. `autoSpeak` says the word when an answer is revealed (recall, pinyin, write).
+- Settings: Voice (sheet: Automatic, best quality, standard, a raw list of every voice with
+  Copy, and how to download a voice), Speed (0.5–1.2, default 0.9), "Say the word with the
+  answer", Test voice (你好！我想喝水。).
+
+## Typed pinyin and picking characters
+
+- `js/core/pinyincheck.js` (pure): `syllableParts` (tone marks or numbers, ü as ü/v/u:),
+  `markSyllable` (the mark goes on a or e, else o in ou, else the last vowel), `applyToneToLast`
+  (what the tone bar does: marks the longest valid syllable at the end of the text, keeps
+  earlier marks; tone 5 removes), `toSyllables` (uses `splitPinyin` with the entry's
+  characters; punctuation stripped), `gradePinyin(input, entry, { tonesRequired })` →
+  `{ correct, close, message, expected }`: letters and tones right = correct; letters right but
+  tones wrong or missing = close (orange); with tones not required, missing tones are fine but
+  typed wrong tones still count; the dictionary pinyin and the pinyin as said are both accepted;
+  儿 forms (nǎr / nar3 / nǎ ér) and a missing apostrophe (xi an) are handled.
+- Mode `pinyin` (`js/screens/practice/pinyin.js`): entries with pinyin and ≤ 6 characters
+  (`canTypePinyin`); a text field with `answer` attributes, Enter checks; the tone bar keys
+  cancel mousedown so the keyboard stays up; after Check the field turns green or red and the
+  answer with a speaker appears.
+- `js/core/choose.js` (pure): `chooseOptions(entries, entry, { count: 4, rng, pool })` → ids,
+  the right one in a random place; words sharing a character first, then the same length; the
+  same text never twice; sentences over 6 characters never offered. Mode `choose`
+  (`choose.js`): entries with a side B; the pool is the same kind of entry (words with words,
+  the "> " characters with characters); tapping a tile answers; cards remember their `options`.
 
 ## Stroke order (data and rules)
 
@@ -133,7 +172,8 @@ among the 3,500 common ones orange (`data/common3500.txt`).
 { itemId, listId, box: 0..5, due, seen, right, wrong, last }
 // History: { at, listId, mode, total, correct }
 // Settings (store "settings"; defaults in js/data/store.js DEFAULT_SETTINGS):
-{ theme: 'system'|'light'|'dark', scope: 'words'|'chars'|'all', reviewLimit: 20, autoAdvance: 0, showPrint: true }
+{ theme: 'system'|'light'|'dark', scope: 'words'|'chars'|'all', reviewLimit: 20, autoAdvance: 0, showPrint: true,
+  writeOutline: false, writeHintAfter: 3, writeLeniency: 1, pinyinTones: true, voiceURI: '', speechRate: 0.9, autoSpeak: true }
 ```
 
 - `withIds(entries, oldEntries)` (`js/core/lists.js`) gives ids; on **Edit list** an entry with
@@ -173,11 +213,13 @@ restored after iOS evicts the app; modals from the bottom).
 
 - **Scope:** `words` = entries at depth 0 (words and sentences), `chars` = depth ≥ 1, `all`.
 - **Modes:** `recall` (Word → Pinyin & meaning) makes one card per entry in scope;
-  `recallReverse` (Pinyin & meaning → Word) only for entries with pinyin or meaning; `write`
-  (Write the characters) only for words of 1–4 characters with stroke data. Cards are
-  `{ listId, type: 'recall', itemId, dir: 'word' | 'meaning' }` or
-  `{ listId, type: 'write', itemId, chars }`. Every type updates the same progress record; the
-  worst outcome of an entry's cards in a session counts.
+  `recallReverse` (Pinyin & meaning → Word) and `choose` (Pick the characters) only for entries
+  with pinyin or meaning; `pinyin` (Type the pinyin) for entries with pinyin and ≤ 6
+  characters; `write` (Write the characters) only for words of 1–4 characters with stroke data.
+  Cards are `{ listId, type: 'recall', itemId, dir: 'word' | 'meaning' }`,
+  `{ type: 'write', chars }`, `{ type: 'pinyin' }` or `{ type: 'choose', options: [ids] }`.
+  Every type updates the same progress record; the worst outcome of an entry's cards in a
+  session counts. The Today review uses recall cards in both directions.
 - **Review (Today):** cards due now across all lists. An entry that has ever been practised comes
   back whatever the scope setting; never-practised entries count only inside the scope. Entries
   being learned come before brand-new ones; the limit is `reviewLimit`; each card gets a random
@@ -192,11 +234,11 @@ restored after iOS evicts the app; modals from the bottom).
 index.html, manifest.webmanifest, sw.js
 css/app.css, css/screens/*.css           design system; hanzi.css = fonts + Chinese pieces
 js/app.js                                boot: database, settings, theme, router, service worker
-js/core/   extract.js pinyin.js listedit.js (Hanzi Grid) · util.js srs.js text.js (Vocab Studio) · lists.js strokes.js (new)
+js/core/   extract.js pinyin.js listedit.js (Hanzi Grid) · util.js srs.js text.js (Vocab Studio) · lists.js strokes.js pinyincheck.js choose.js (new)
 js/data/   db.js store.js chars.js sample.js strokes.js
-js/ui/     dom.js components.js icons.js router.js viewport.js clipboard.js files.js strokes.js
+js/ui/     dom.js components.js icons.js router.js viewport.js clipboard.js files.js strokes.js speech.js
 js/screens/ today.js lists.js import.js list-detail.js settings.js index.js
-js/screens/practice/ session.js practice.js recall.js write.js results.js
+js/screens/practice/ session.js practice.js recall.js write.js pinyin.js choose.js results.js
 vendor/ hanzi-writer.esm.js (+ licence, VERSIONS.txt)
 fonts/ data/ (common3500, font-chars, strokes/, stroke-chars) prompts/ icons/
 tests/unit/*.test.js (npm test) · tests/e2e/flows.mjs (npm run e2e) · tests/fixtures/
@@ -206,9 +248,12 @@ tools/ serve.mjs update-sw.mjs make-icons.mjs make-strokes.mjs (cache in tools/c
 Browser test (`tests/e2e/flows.mjs`): serves the app at `http://localhost:8123/CHINESE-PRACTICE-1/`
 (the GitHub Pages path), Chromium at iPhone size: onboarding → sample list → a full recall
 session → results → Today stats → paste Bài 7 → the Strokes sheet (牛 has 4 diagram cells) →
-a writing card drawn stroke by stroke along the data's medians with the mouse (reads the
-writer's SVG transform, so it tests the real quiz) → manifest id → service worker cache prefix →
-other apps' caches untouched → offline reload with the KaiTi font. Screenshots in `tests/output/`.
+pick the characters (the tile matching the pinyin shown) → type the pinyin (one card with the
+tone bar, one typed with marks) → a writing card drawn stroke by stroke along the data's
+medians with the mouse (reads the writer's SVG transform, so it tests the real quiz) → the
+Settings pronunciation section and voice sheet (no voices in headless Chromium) → manifest id →
+service worker cache prefix → other apps' caches untouched → offline reload with the KaiTi font.
+Screenshots in `tests/output/`.
 
 ## Milestones
 
@@ -218,11 +263,11 @@ other apps' caches untouched → offline reload with the KaiTi font. Screenshots
    Writer vendored, the data pipeline, settings for hints, strictness and tracing. Not built:
    a draw-and-grade-yourself fallback for characters without data (the writing mode simply
    skips such words; all 3,500 common characters have data).
-3. **Typed pinyin and tones** (letters plus a five-key tone bar, tone numbers accepted; graded
-   per syllable with `splitPinyin`), **pick the character** (distractors from the same lesson),
-   **audio** (iPhone's offline Chinese voices; `speech.js` from Vocab Studio with a `zh` filter).
+3. **Typed pinyin, pick the characters, pronunciation** — done (see "Typed pinyin and picking
+   characters" and "Pronunciation"). Not verified: how the voices sound on the owner's iPhone;
+   headless Chromium has no voices, so the browser test only checks that the screens work.
 4. **Sentences:** fill the blank in an example sentence from a word bank, put a sentence's chunks
-   in order, dictation.
+   in order, dictation (hear the sentence, write the characters or the pinyin).
 5. **Polish:** the AI prompt flow (Copy prompt / paste reply, filling in pinyin, meanings and
    example sentences like Hanzi Grid), README checklist on the owner's iPhone, a shared
    character bank across lists.

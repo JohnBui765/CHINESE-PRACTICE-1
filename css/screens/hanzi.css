@@ -373,7 +373,123 @@
   color: var(--label-3);
   text-align: center;
 }
-.rc-strokes { flex: none; }
+.rc-strokes,
+.rc-say { flex: none; }
+.rc-block-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.rc-example-say {
+  width: 32px;
+  height: 32px;
+  margin: -6px 0;
+}
+
+/* ---------- typed pinyin card ---------- */
+
+.py {
+  padding: 16px 16px 20px;
+  border-radius: var(--radius-lg);
+  background: var(--card);
+  box-shadow: var(--shadow-card);
+  text-align: center;
+}
+.py-word {
+  margin: 6px 0 2px;
+  line-height: 1.15;
+  letter-spacing: 0.04em;
+  overflow-wrap: anywhere;
+}
+.py .rc-print { margin-bottom: 4px; }
+.py .field {
+  width: 100%;
+  margin-top: 14px;
+  font-size: 22px;
+  text-align: center;
+}
+.py .field.right { border-color: var(--green); }
+.py .field.wrong { border-color: var(--red); }
+.py-tones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+  margin-top: 10px;
+}
+.py-tone {
+  min-width: 46px;
+  height: 44px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--fill);
+  color: var(--label);
+  font: 600 20px var(--font);
+  cursor: pointer;
+}
+.py-tone:active { background: var(--fill-2); }
+.py-answer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 2px 6px;
+  margin-top: 12px;
+  font-size: 18px;
+}
+.py-answer-pinyin { font-weight: 600; }
+.py-answer-meaning { color: var(--label-2); }
+
+/* ---------- pick the characters card ---------- */
+
+.ch {
+  padding: 16px 16px 20px;
+  border-radius: var(--radius-lg);
+  background: var(--card);
+  box-shadow: var(--shadow-card);
+  text-align: center;
+}
+.ch-prompt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+.ch-hear {
+  display: flex;
+  justify-content: center;
+  margin-top: 10px;
+}
+.ch-tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+.ch-tile {
+  min-height: 88px;
+  padding: 10px;
+  border: 2px solid transparent;
+  border-radius: 14px;
+  background: var(--fill);
+  color: var(--label);
+  font-size: 38px;
+  line-height: 1.1;
+  letter-spacing: 0.04em;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+.ch-tile.long { font-size: 26px; }
+.ch-tile.sentence { font-size: 19px; }
+.ch-tile:active { background: var(--fill-2); }
+.ch-tile:disabled { opacity: 1; }
+.ch-tile.right { border-color: var(--green); }
+.ch-tile.wrong {
+  border-color: var(--red);
+  opacity: 0.75;
+}
 
 /* ---------- writing card ---------- */
 

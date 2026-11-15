@@ -4,14 +4,22 @@
 import { shuffle, uid } from '../../core/util.js';
 import { newProgress, practise, dueItems } from '../../core/srs.js';
 import { writableChars } from '../../core/strokes.js';
+import { chooseOptions } from '../../core/choose.js';
+import { chineseChars } from '../../core/extract.js';
 import * as store from '../../data/store.js';
 
 export const MODES = {
   recall: { key: 'recall', label: 'Word → Pinyin & meaning', short: 'See the characters, recall the rest', icon: 'cards', color: 'var(--accent)' },
   recallReverse: { key: 'recallReverse', label: 'Pinyin & meaning → Word', short: 'Recall the characters, then check', icon: 'eye', color: 'var(--purple)' },
+  choose: { key: 'choose', label: 'Pick the characters', short: 'From four words of the lesson', icon: 'target', color: 'var(--pink)' },
+  pinyin: { key: 'pinyin', label: 'Type the pinyin', short: 'Letters, then tap the tone', icon: 'keyboard', color: 'var(--blue)' },
   write: { key: 'write', label: 'Write the characters', short: 'Draw every stroke in order', icon: 'pencil', color: 'var(--teal)' },
   review: { key: 'review', label: 'Review', short: 'Words due today', icon: 'flame', color: 'var(--orange)' },
 };
+
+// Typing the pinyin of a long sentence is no exercise for a beginner: words only.
+export const PINYIN_MAX_CHARS = 6;
+export const canTypePinyin = (entry) => !!String(entry?.pinyin || '').trim() && chineseChars(entry?.word || '').length > 0 && chineseChars(entry.word).length <= PINYIN_MAX_CHARS;
 
 export const SCOPES = [
   { value: 'words', label: 'Words' },
@@ -54,6 +62,20 @@ export function buildCards(list, mode, { itemIds = null, scope = 'words', rng = 
       if (!wanted(e)) continue;
       const chars = writableChars(e.word, strokeChars);
       if (chars) cards.push({ listId: list.id, type: 'write', itemId: e.id, chars });
+    }
+  } else if (mode === 'pinyin') {
+    cards = practiceEntries(list, scope)
+      .filter((e) => wanted(e) && canTypePinyin(e))
+      .map((e) => ({ listId: list.id, type: 'pinyin', itemId: e.id }));
+  } else if (mode === 'choose') {
+    // The other words come from the same kind of entry: words with words, characters with characters.
+    cards = [];
+    const all = list.entries || [];
+    for (const e of practiceEntries(list, scope)) {
+      if (!wanted(e) || !hasSideB(e)) continue;
+      const pool = all.filter((x) => (Number(x.depth) || 0) > 0 === (Number(e.depth) || 0) > 0);
+      const options = chooseOptions(all, e, { rng, pool });
+      if (options && options.length >= 2) cards.push({ listId: list.id, type: 'choose', itemId: e.id, options });
     }
   } else {
     const dir = mode === 'recallReverse' ? 'meaning' : 'word';

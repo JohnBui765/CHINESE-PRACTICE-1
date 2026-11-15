@@ -30,8 +30,24 @@ export function pinyinNode(entry, className) {
   return h('div', { class: className, lang: 'zh-Latn' }, kids);
 }
 
+// A speaker button that does not disturb what it sits on (a card that flips, a row).
+export function sayButton(text, speak, { className = '', variant = '' } = {}) {
+  if (!speak) return null;
+  return iconButton({
+    icon: 'speaker',
+    label: `Say ${text}`,
+    variant,
+    className,
+    onTap: (e) => {
+      e.stopPropagation();
+      speak(text);
+    },
+  });
+}
+
 // The example sentence in KaiTi with the word underlined, then its pinyin and English.
-export function exampleNode(entry) {
+// `speak` (optional) adds a speaker for the sentence.
+export function exampleNode(entry, { speak = null } = {}) {
   if (!entry.example) return null;
   const text = String(entry.example);
   const ul = exampleUnderline(entry);
@@ -39,7 +55,7 @@ export function exampleNode(entry) {
   return h(
     'div',
     { class: 'rc-block' },
-    h('div', { class: 'rc-block-label' }, 'Example'),
+    h('div', { class: 'rc-block-label' }, 'Example', sayButton(text, speak, { className: 'rc-example-say' })),
     h('div', { class: 'rc-example-zh kai', lang: 'zh' }, zh),
     entry.examplePinyin ? h('div', { class: 'rc-example-py', lang: 'zh-Latn' }, entry.examplePinyin) : null,
     entry.exampleMeaning ? h('div', { class: 'rc-example-en' }, entry.exampleMeaning) : null,
@@ -77,11 +93,14 @@ export function render(card, ctx) {
   let flipped = false; // the back face is showing
   let anim = [];
 
+  // Hearing the word gives away its pinyin, so the front has a speaker only when the
+  // characters are the question.
   const front =
     dir === 'word'
       ? h(
           'div',
           { class: 'fc-face fc-front' },
+          sayButton(item.word, ctx.speak, { className: 'fc-say', variant: 'filled' }),
           h(
             'div',
             { class: 'fc-front-main' },
@@ -115,7 +134,8 @@ export function render(card, ctx) {
         h('span', { class: 'rc-back-word kai', lang: 'zh' }, item.word),
         settings.showPrint ? h('span', { class: 'rc-back-print print', lang: 'zh' }, item.word) : null,
       ),
-      // Stroke order of the word, without turning the card.
+      // Hear the word, and its stroke order, without turning the card.
+      sayButton(item.word, ctx.speak, { className: 'rc-say', variant: 'filled' }),
       iconButton({
         icon: 'pencil',
         label: 'Stroke order',
@@ -129,7 +149,7 @@ export function render(card, ctx) {
     ),
     h('div', { class: 'rc-row' }, pinyinNode(item, 'rc-pinyin'), item.meaning ? h('div', { class: 'rc-meaning' }, item.meaning) : null),
     item.unsure ? h('div', { class: 'rc-unsure' }, 'The AI was not sure about this line: check it.') : null,
-    exampleNode(item),
+    exampleNode(item, { speak: ctx.speak }),
     partsNode(item, list.entries),
   );
 
@@ -175,6 +195,8 @@ export function render(card, ctx) {
     if (revealed) return;
     revealed = true;
     flip(true);
+    // Inside the tap that revealed the answer, so iOS allows the speech.
+    if (settings.autoSpeak && ctx.speak) ctx.speak(item.word);
     ctx.showGradeButtons();
   }
 

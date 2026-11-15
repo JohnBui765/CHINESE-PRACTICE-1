@@ -14,9 +14,15 @@ import { toLessonText, safeFileName, chineseChars } from '../core/extract.js';
 import { countLabel, charWarnings, pinyinLabel } from '../core/lists.js';
 import { writableChars } from '../core/strokes.js';
 import { debounce, startOfDay, DAY } from '../core/util.js';
-import { MODES, SCOPES, practiceEntries, hasSideB } from './practice/session.js';
+import { speak } from '../ui/speech.js';
+import { MODES, SCOPES, practiceEntries, hasSideB, canTypePinyin } from './practice/session.js';
 import { entryRow } from './import.js';
-import { exampleNode, partsNode, pinyinNode } from './practice/recall.js';
+import { exampleNode, partsNode, pinyinNode, sayButton } from './practice/recall.js';
+
+function say(text) {
+  const s = store.settings();
+  speak(text, { rate: s.speechRate, voiceURI: s.voiceURI });
+}
 
 const STAGES = [
   { key: 'new', label: 'New', color: 'var(--label-3)' },
@@ -106,10 +112,13 @@ export default async function create(params, ctx = {}) {
     );
     const sideB = pool.filter(hasSideB).length;
     const writable = pool.filter((e) => writableChars(e.word, strokeSet)).length;
+    const typable = pool.filter(canTypePinyin).length;
     const modeRows = [
       scopeRow,
       row({ icon: MODES.recall.icon, iconBg: MODES.recall.color, title: MODES.recall.label, subtitle: `${MODES.recall.short} · ${pool.length} cards`, onTap: () => push('practice', { listId: list.id, mode: 'recall' }, { modal: true }) }),
       row({ icon: MODES.recallReverse.icon, iconBg: MODES.recallReverse.color, title: MODES.recallReverse.label, subtitle: `${MODES.recallReverse.short} · ${sideB} cards`, onTap: () => push('practice', { listId: list.id, mode: 'recallReverse' }, { modal: true }) }),
+      row({ icon: MODES.choose.icon, iconBg: MODES.choose.color, title: MODES.choose.label, subtitle: `${MODES.choose.short} · ${sideB} cards`, onTap: () => push('practice', { listId: list.id, mode: 'choose' }, { modal: true }) }),
+      row({ icon: MODES.pinyin.icon, iconBg: MODES.pinyin.color, title: MODES.pinyin.label, subtitle: `${MODES.pinyin.short} · ${typable} cards`, onTap: () => push('practice', { listId: list.id, mode: 'pinyin' }, { modal: true }) }),
       row({ icon: MODES.write.icon, iconBg: MODES.write.color, title: MODES.write.label, subtitle: `${MODES.write.short} · ${writable} cards`, onTap: () => push('practice', { listId: list.id, mode: 'write' }, { modal: true }) }),
     ];
     if (sum.due && sum.due < sum.total) modeRows.push(row({ icon: 'flame', iconBg: 'var(--orange)', title: 'Review what is due', subtitle: `${sum.due} of these cards are due now`, onTap: () => push('practice', { mode: 'review' }, { modal: true }) }));
@@ -139,11 +148,16 @@ export default async function create(params, ctx = {}) {
       { class: 'es-body' },
       h('div', { class: 'es-word kai', lang: 'zh' }, entry.word),
       h('div', { class: 'es-print print', lang: 'zh' }, entry.word),
-      hasStrokes(entry.word) ? h('div', { class: 'es-actions' }, button({ label: 'Strokes', icon: 'pencil', variant: 'tinted', onTap: () => showStrokes(entry.word) })) : null,
+      h(
+        'div',
+        { class: 'es-actions' },
+        button({ label: 'Hear it', icon: 'speaker', variant: 'tinted', onTap: () => say(entry.word) }),
+        hasStrokes(entry.word) ? button({ label: 'Strokes', icon: 'pencil', variant: 'tinted', onTap: () => showStrokes(entry.word) }) : null,
+      ),
       h('div', { class: 'rc-row' }, pinyinNode(entry, 'rc-pinyin'), entry.meaning ? h('div', { class: 'rc-meaning' }, entry.meaning) : null),
       entry.unsure ? h('div', { class: 'rc-unsure' }, 'The AI was not sure about this line: check it.') : null,
       warning ? h('div', { class: ['ent-warn', warning.red && 'red'] }, warning.text) : null,
-      exampleNode(entry),
+      exampleNode(entry, { speak: say }),
       partsNode(entry, list.entries),
       h('div', { class: 'rc-block' }, h('div', { class: 'rc-block-label' }, 'Progress'), h('div', { class: ['ent-status', status?.due && 'due'] }, status ? status.text : 'New · not practised yet')),
     );

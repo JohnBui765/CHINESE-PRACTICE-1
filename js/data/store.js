@@ -14,6 +14,10 @@ export const DEFAULT_SETTINGS = Object.freeze({
   writeOutline: false, // writing mode: start every character with a faint outline to trace
   writeHintAfter: 3, // writing mode: show the stroke after this many misses (0 = never)
   writeLeniency: 1, // writing mode: Hanzi Writer leniency (1.5 lenient, 1 normal, 0.7 strict)
+  pinyinTones: true, // typed pinyin: the tones must be right (off = letters are enough)
+  voiceURI: '', // '' = the best Chinese voice on this device
+  speechRate: 0.9, // 0.5 .. 1.2
+  autoSpeak: true, // say the word when the answer is shown
 });
 
 const APP_ID = 'chinese-practice-1';

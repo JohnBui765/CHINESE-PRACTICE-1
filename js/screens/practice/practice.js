@@ -7,11 +7,14 @@ import { button, progressBar, emptyState, alert, iconButton, hasOpenOverlay, toa
 import { pop, replace } from '../../ui/router.js';
 import * as store from '../../data/store.js';
 import { strokeChars as loadStrokeChars, strokeData } from '../../data/strokes.js';
+import { speak as tts, stop as stopSpeech } from '../../ui/speech.js';
 import { MODES, buildCards, buildReviewCards, createSession, currentCard, answer, isFinished, progressFraction, commit, summarize, getSnapshot, clearSnapshot, liveCards, cardResolves, recoverSnapshot, commitPausedSession, hasSideB } from './session.js';
 import * as recall from './recall.js';
 import * as write from './write.js';
+import * as pinyin from './pinyin.js';
+import * as choose from './choose.js';
 
-const RENDERERS = { recall, write };
+const RENDERERS = { recall, write, pinyin, choose };
 const PRAISE = ['Correct!', 'Nice!', 'Great!', 'Well done!', 'Spot on!'];
 // After the footer changes (Show answer → grade buttons, a new card), taps are ignored this long:
 // the second tap of a double tap would otherwise hit the button that just took the first one's place.
@@ -71,6 +74,8 @@ export default async function create(params) {
       if (cards.length) session = createSession({ mode: params.mode, listId: list.id, title: list.name, cards });
       else if (params.mode === 'recallReverse') emptyMessage = { title: 'No pinyin or meanings yet', message: 'This mode shows the pinyin and meaning first. Add them to the list (Edit list), then try again.', icon: 'eye' };
       else if (params.mode === 'write') emptyMessage = { title: 'Nothing to write here', message: 'Writing works for words of 1 to 4 characters that have stroke data (the 3,500 common characters). Change what to practise, or pick another list.', icon: 'pencil' };
+      else if (params.mode === 'pinyin') emptyMessage = { title: 'No pinyin to type', message: 'This mode needs entries with pinyin (words of up to 6 characters). Add pinyin with Edit list, or change what to practise.', icon: 'keyboard' };
+      else if (params.mode === 'choose') emptyMessage = { title: 'Not enough words to choose from', message: 'This mode needs at least two entries with pinyin or a meaning in the list.', icon: 'target' };
       else emptyMessage = { title: 'Nothing to practise', message: 'Change what to practise (Words, Characters or All) on the list page.' };
     }
   }
@@ -126,6 +131,12 @@ export default async function create(params) {
 
   /* ---------- card flow ---------- */
 
+  // Speaks Chinese text with the user's voice and speed; call it inside tap handlers (iOS).
+  const speakText = (text) => {
+    const s = store.settings();
+    return tts(text, { rate: s.speechRate, voiceURI: s.voiceURI });
+  };
+
   function setPrimary(label, { ready = true, tone = 'primary' } = {}) {
     primaryLabel.textContent = label;
     primary.disabled = !ready;
@@ -173,6 +184,7 @@ export default async function create(params) {
       strokes,
       retry: card.retry,
       rng: Math.random,
+      speak: speakText,
       setReady: (ready) => {
         if (state === 'idle') primary.disabled = !ready;
       },
@@ -269,6 +281,7 @@ export default async function create(params) {
 
   function next() {
     clearAuto();
+    stopSpeech();
     if (isFinished(session)) return finish();
     showCard();
   }
@@ -388,6 +401,7 @@ export default async function create(params) {
     onDestroy() {
       clearAuto();
       clearTimeout(settleTimer);
+      stopSpeech();
       document.removeEventListener('keydown', onKey);
       if (current?.destroy) current.destroy();
     },

@@ -61,6 +61,16 @@ characters listed under them) or **All**. Then pick a mode:
   the meaning, the example sentence with the word underlined, and the word's characters.
 - **Pinyin & meaning → Word**: the other way round. Write the characters on paper or picture
   them, then check.
+- **Pick the characters**: the pinyin and meaning are shown (tap the speaker to hear the word),
+  and you pick the right word among four from the same lesson. The wrong ones are chosen to be
+  confusable: words that share a character, then words of the same length.
+- **Type the pinyin**: the characters are shown and you type the pinyin. Type the letters
+  (nihao), then tap a tone key under the field: **ā á ǎ à** put the tone on the last syllable
+  you typed, **a** takes it off, **ü** types ü. Tone numbers work too (ni3hao3), and so do v or
+  u: for ü. **Check** grades the letters and the tones separately: right letters with wrong or
+  missing tones is orange, not right. Both the dictionary pinyin and the pinyin as said in the
+  word (yǒu → you) are accepted. In Settings, **Tones must be right** can be turned off while
+  you learn the letters.
 - **Write the characters**: the pinyin and meaning are shown, and you draw each stroke of each
   character with your finger in a 田字格, in the right order. A stroke in the wrong place, order
   or direction is refused; after three misses the right stroke lights up. No mistakes counts as
@@ -72,6 +82,14 @@ characters listed under them) or **All**. Then pick a mode:
 pencil on the back of a card. The character is drawn stroke by stroke (**Play again**, **One
 stroke** at a time, **Slower**), with a numbered diagram under it. The order follows the mainland
 China standard; your textbook has the last word.
+
+**Hear it.** Every speaker button says the characters with your iPhone's own Chinese voice,
+offline: on the cards, next to example sentences, on a word's page, in the Strokes sheet and on
+the results. When an answer is shown, the word is said by itself (turn that off in Settings). The
+built-in voice is Tingting; a much more natural one can be downloaded once in iPhone Settings ›
+Accessibility › Spoken Content › Voices › Chinese (for example Li-mu or Yu-shu, marked Enhanced
+or Premium), then chosen in Hanzi Drill › Settings › Voice. The app sends the characters, never
+the pinyin, so the voice applies the natural tone changes itself.
 
 A card you miss comes back later in the same session. Every card is scheduled for review: after
 1, 3, 7, 14 and 30 days when you keep knowing it, sooner when you miss it.
@@ -85,8 +103,9 @@ closes the app in the middle of a session, Today offers to **Resume** it.
 ### Settings
 
 What to practise by default, cards per review, auto-continue after grading, the print form on or
-off, the writing hints (when the stroke is shown, how strict the check is, tracing an outline),
-light or dark theme, and **Backup**: export your lists and progress to a file (Files or
+off, whether typed tones must be right, the voice, its speed and whether the word is said with
+the answer, the writing hints (when the stroke is shown, how strict the check is, tracing an
+outline), light or dark theme, and **Backup**: export your lists and progress to a file (Files or
 iCloud Drive) and restore them on a new phone. The lists live only on this phone, so export a
 backup now and then.
 
@@ -109,7 +128,9 @@ it is opened online. Tap Update. Nothing you saved is lost.
 - [ ] **Try a sample list** on Today, open a card: the characters show in the handwriting font.
 - [ ] Turn on **Airplane Mode**, close and open the app: it still works, the lists are there.
 - [ ] **+** → **Open file…** → pick a `.txt` list from the Files app: the preview shows the words.
-- [ ] Practise a list in both modes, then check Today shows the review count.
+- [ ] Practise a list in every mode, then check Today shows the review count.
+- [ ] Settings → **Test voice**: you hear 你好！我想喝水。 Pick a downloaded voice under **Voice** if you
+      have one.
 - [ ] Settings → **Export backup** → Save to Files.
 
 ---
@@ -169,5 +190,5 @@ node tools/make-icons.mjs    # re-render the PNG icons from icons/icon.svg
 node tools/make-strokes.mjs  # rebuild data/strokes/ from the pinned animCJK source (downloads it once)
 ```
 
-`CLAUDE.md` is the full specification and the plan for the next milestones (typed pinyin, the
-iPhone's Chinese voice and sentence exercises come next).
+`CLAUDE.md` is the full specification and the plan for the next milestones (sentence exercises
+come next).

@@ -115,6 +115,7 @@ export function render(card, ctx) {
       : { correct: true, hinted: helped || mistakes > 0, feedback: { title: mistakes === 0 && !helped ? 'Perfect strokes!' : 'Done — with some help', detail: mistakes ? `${mistakes} wrong ${mistakes === 1 ? 'stroke' : 'strokes'}` : outlineShown ? 'Traced over the outline' : '' } };
     showAnswer();
     say(result.correct ? 'All strokes done.' : 'Look at the strokes again.', !result.correct);
+    if (settings.autoSpeak && ctx.speak) ctx.speak(item.word);
     ctx.submit();
   }
 

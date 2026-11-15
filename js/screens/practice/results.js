@@ -3,9 +3,16 @@
 import { h } from '../../ui/dom.js';
 import { button, ring, section, row } from '../../ui/components.js';
 import { pop, replace } from '../../ui/router.js';
+import { speak } from '../../ui/speech.js';
 import * as store from '../../data/store.js';
 import { pinyinLabel } from '../../core/lists.js';
 import { MODES } from './session.js';
+import { sayButton } from './recall.js';
+
+function say(text) {
+  const s = store.settings();
+  speak(text, { rate: s.speechRate, voiceURI: s.voiceURI });
+}
 
 function formatDuration(ms) {
   const s = Math.max(1, Math.round(ms / 1000));
@@ -46,7 +53,7 @@ export default async function create(params) {
       row({
         title: h('span', { class: 'ent-head' }, h('span', { class: 'ent-zh kai', lang: 'zh' }, entry.word), pinyinLabel(entry) ? h('span', { class: 'ent-py', lang: 'zh-Latn' }, pinyinLabel(entry)) : null),
         subtitle: entry.meaning || null,
-        accessory: 'none',
+        accessory: sayButton(entry.word, say),
         className: 'ent',
       }),
     );

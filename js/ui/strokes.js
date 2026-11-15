@@ -5,7 +5,9 @@
 import HanziWriter from '../../vendor/hanzi-writer.esm.js';
 import { h, svg } from './dom.js';
 import { button, segmented, sheet, toast } from './components.js';
+import { speak } from './speech.js';
 import { strokeData } from '../data/strokes.js';
+import { settings } from '../data/store.js';
 import { glyphTransform, glyphPoint, diagramSteps } from '../core/strokes.js';
 import { chineseChars } from '../core/extract.js';
 
@@ -116,6 +118,10 @@ export async function showStrokes(word) {
 
   const playBtn = button({ label: 'Play again', icon: 'play', variant: 'tinted', onTap: () => animate() });
   const stepBtn = button({ label: 'One stroke', icon: 'arrowRight', variant: 'tinted', onTap: () => step() });
+  const sayBtn = button({ label: 'Hear it', icon: 'speaker', variant: 'plain', onTap: () => {
+    const s = settings();
+    speak(items[current].ch, { rate: s.speechRate, voiceURI: s.voiceURI });
+  } });
   const slowBtn = button({ label: 'Slower', icon: 'clock', variant: 'plain', onTap: () => {
     slow = !slow;
     slowBtn.querySelector('span').textContent = slow ? 'Normal speed' : 'Slower';
@@ -161,7 +167,7 @@ export async function showStrokes(word) {
     nextStroke += 1;
   }
 
-  const content = h('div', { class: 'sk-sheet' }, picker, box.el, title, h('div', { class: 'sk-controls' }, playBtn, stepBtn, slowBtn), diagramHost, h('p', { class: 'sk-note' }, 'Mainland China stroke order. Your textbook has the last word.'));
+  const content = h('div', { class: 'sk-sheet' }, picker, box.el, title, h('div', { class: 'sk-controls' }, playBtn, stepBtn, slowBtn, sayBtn), diagramHost, h('p', { class: 'sk-note' }, 'Mainland China stroke order. Your textbook has the last word.'));
   const s = sheet({ title: 'Strokes', content, onClose: () => stop() });
   select(0);
   return s;
