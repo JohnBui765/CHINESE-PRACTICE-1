@@ -96,6 +96,58 @@ try {
   await page.getByRole('button', { name: /Save 10 words · 9 characters/ }).click();
   await page.getByText('Bài 7').first().waitFor();
   await page.getByText('牛奶').first().waitFor();
+
+  // 4b. The Strokes sheet from an entry: 牛 has 4 strokes, so the diagram has 4 cells.
+  await idle();
+  await page.locator('.ent', { hasText: '牛奶' }).first().click();
+  await page.getByRole('button', { name: 'Strokes' }).click();
+  await page.locator('.sk-sheet .sk-cell').first().waitFor();
+  assert.equal(await page.locator('.sk-sheet .sk-cell').count(), 4, '牛 has 4 strokes');
+  await page.waitForTimeout(1500);
+  await page.screenshot({ path: shot('08-strokes.png') });
+  await page.getByRole('button', { name: 'Close' }).last().click();
+  await page.waitForTimeout(400);
+  await page.getByRole('button', { name: 'Close' }).last().click();
+  await page.waitForTimeout(400);
+
+  // 4c. The writing mode: draw every stroke of the first card along the data's medians.
+  await page.getByText('Write the characters').first().click();
+  await page.locator('.wr').waitFor();
+  await idle(); // the modal has finished sliding in: positions can be measured
+  await page.waitForTimeout(300);
+  const boxes = page.locator('.wr .sk-box');
+  const boxCount = await boxes.count();
+  assert.ok(boxCount >= 1 && boxCount <= 4, `boxes: ${boxCount}`);
+  await page.screenshot({ path: shot('09-write.png') });
+  for (let i = 0; i < boxCount; i++) {
+    const box = boxes.nth(i);
+    await box.locator('.sk-target svg g[transform]').first().waitFor();
+    const info = await box.evaluate(async (el) => {
+      const svgEl = el.querySelector('.sk-target svg');
+      const g = svgEl.querySelector('g[transform]');
+      const m = g.getAttribute('transform').match(/translate\(([-\d.]+),\s*([-\d.]+)\)\s*scale\(([-\d.]+),\s*([-\d.]+)\)/);
+      const r = svgEl.getBoundingClientRect();
+      const { strokeData } = await import(new URL('js/data/strokes.js', document.baseURI).href);
+      const data = await strokeData(el.dataset.char);
+      return { left: r.left, top: r.top, tx: Number(m[1]), ty: Number(m[2]), scale: Number(m[3]), medians: data.medians };
+    });
+    for (const median of info.medians) {
+      const pts = median.map(([x, y]) => [info.left + info.tx + x * info.scale, info.top + info.ty - y * info.scale]);
+      await page.mouse.move(pts[0][0], pts[0][1]);
+      await page.mouse.down();
+      for (const [x, y] of pts.slice(1)) await page.mouse.move(x, y, { steps: 4 });
+      await page.mouse.up();
+      await page.waitForTimeout(120);
+    }
+  }
+  await page.getByText(/Perfect strokes!|Done — with some help/).waitFor();
+  await page.screenshot({ path: shot('10-write-done.png') });
+  await page.waitForTimeout(400);
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await page.waitForTimeout(600);
+  await page.getByRole('button', { name: 'End practice' }).click();
+  await page.getByRole('button', { name: 'End session' }).click();
+  await page.getByRole('button', { name: 'Done' }).click();
   await idle();
   await page.locator('.nav-back').first().click();
   await idle();

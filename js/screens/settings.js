@@ -17,6 +17,17 @@ const AUTO_ADVANCE = [
   { value: 5, label: '5 seconds' },
 ];
 const REVIEW_LIMIT = [10, 20, 30, 50].map((n) => ({ value: n, label: `${n} cards` }));
+const HINT_AFTER = [
+  { value: 2, label: 'After 2 misses' },
+  { value: 3, label: 'After 3 misses' },
+  { value: 5, label: 'After 5 misses' },
+  { value: 0, label: 'Never' },
+];
+const LENIENCY = [
+  { value: 1.5, label: 'Lenient' },
+  { value: 1, label: 'Normal' },
+  { value: 0.7, label: 'Strict' },
+];
 
 const labelOf = (options, value) => options.find((o) => o.value === value)?.label ?? String(value);
 
@@ -169,6 +180,15 @@ export default async function create() {
         choiceRow('Cards per review', 'reviewLimit', REVIEW_LIMIT),
         choiceRow('Continue after grading', 'autoAdvance', AUTO_ADVANCE, { sheetTitle: 'Auto-continue', sheetFooter: 'After you grade a card, go to the next one on its own after this long.' }),
         controlRow('Show the print form', toggle({ checked: st.showPrint, onChange: set('showPrint'), label: 'Show the print form' }), 'The screen shape 黑体 under the handwriting shape 楷体'),
+      ],
+    }),
+    section({
+      header: 'Writing',
+      footer: 'Writing checks every stroke you draw: its place, shape and direction, in order.',
+      children: [
+        choiceRow('Show the stroke as a hint', 'writeHintAfter', HINT_AFTER, { sheetTitle: 'Hint', sheetFooter: 'After this many wrong tries on one stroke, the right stroke lights up. A card that needed hints keeps its review date instead of moving up.' }),
+        choiceRow('Strictness', 'writeLeniency', LENIENCY, { sheetFooter: 'How close a drawn stroke must be to count. Lenient suits a finger on a small screen.' }),
+        controlRow('Trace the outline', toggle({ checked: st.writeOutline, onChange: set('writeOutline'), label: 'Trace the outline' }), 'Start every character with a faint outline to trace over'),
       ],
     }),
     section({

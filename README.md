@@ -61,6 +61,17 @@ characters listed under them) or **All**. Then pick a mode:
   the meaning, the example sentence with the word underlined, and the word's characters.
 - **Pinyin & meaning → Word**: the other way round. Write the characters on paper or picture
   them, then check.
+- **Write the characters**: the pinyin and meaning are shown, and you draw each stroke of each
+  character with your finger in a 田字格, in the right order. A stroke in the wrong place, order
+  or direction is refused; after three misses the right stroke lights up. No mistakes counts as
+  known; a card that needed hints keeps its review date; **Can't remember** shows the strokes
+  and counts as missed. **Show outline** gives a faint shape to trace over. Works for words of
+  one to four characters.
+
+**Stroke order** for any character: tap a word on a list page and then **Strokes**, or tap the
+pencil on the back of a card. The character is drawn stroke by stroke (**Play again**, **One
+stroke** at a time, **Slower**), with a numbered diagram under it. The order follows the mainland
+China standard; your textbook has the last word.
 
 A card you miss comes back later in the same session. Every card is scheduled for review: after
 1, 3, 7, 14 and 30 days when you keep knowing it, sooner when you miss it.
@@ -74,7 +85,8 @@ closes the app in the middle of a session, Today offers to **Resume** it.
 ### Settings
 
 What to practise by default, cards per review, auto-continue after grading, the print form on or
-off, light or dark theme, and **Backup**: export your lists and progress to a file (Files or
+off, the writing hints (when the stroke is shown, how strict the check is, tracing an outline),
+light or dark theme, and **Backup**: export your lists and progress to a file (Files or
 iCloud Drive) and restore them on a new phone. The lists live only on this phone, so export a
 backup now and then.
 
@@ -129,8 +141,12 @@ under its own name: the offline copies are named `chinese-practice-1-…`, its d
   [shengdoushi/common-standard-chinese-characters-table](https://github.com/shengdoushi/common-standard-chinese-characters-table),
   cross-checked against the npm package `togscc` (see Hanzi Grid). `data/font-chars.txt` lists
   the characters both fonts have.
-- **App icon:** the character 习 drawn from the stroke data of
-  [animCJK](https://github.com/parsimonhi/animCJK) (Arphic Public License); see `icons/README.txt`.
+- **Stroke order:** the stroke shapes and order of the 3,500 common characters come from
+  [animCJK](https://github.com/parsimonhi/animCJK) (mainland-China order, derived from Make Me a
+  Hanzi and the Arphic KaiTi fonts), Arphic Public License; see `data/strokes/README.txt`. They
+  are drawn and checked by [Hanzi Writer](https://github.com/chanind/hanzi-writer) 3.7.3 (MIT),
+  in `vendor/`.
+- **App icon:** the character 习 drawn from the same stroke data; see `icons/README.txt`.
 - **Code:** the iPhone shell (navigation, components, storage, spaced repetition, practice engine)
   comes from Vocab Studio, the owner's English app; the lesson reader and pinyin modules from
   Hanzi Grid. MIT licence (`LICENSE`).
@@ -150,7 +166,8 @@ node tools/serve.mjs 8080 --base=/CHINESE-PRACTICE-1/   # at the GitHub Pages pa
 npm run e2e                  # browser flow in Chromium at iPhone size; screenshots in tests/output/
 node tools/update-sw.mjs     # after changing any app file: refresh the offline file list + version
 node tools/make-icons.mjs    # re-render the PNG icons from icons/icon.svg
+node tools/make-strokes.mjs  # rebuild data/strokes/ from the pinned animCJK source (downloads it once)
 ```
 
-`CLAUDE.md` is the full specification and the plan for the next milestones (stroke order
-animations and stroke-by-stroke writing practice come next).
+`CLAUDE.md` is the full specification and the plan for the next milestones (typed pinyin, the
+iPhone's Chinese voice and sentence exercises come next).

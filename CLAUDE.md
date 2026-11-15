@@ -27,8 +27,11 @@ with no connection.
 - Plain HTML, CSS and JavaScript ES modules. No framework, no TypeScript, no bundler: the files
   in the repo are exactly the files the browser loads.
 - Browsers: Safari on iPhone (iOS 17 or newer), Home Screen app; Chrome or Edge on Windows.
-- **Runtime libraries:** none yet. Milestone 2 vendors Hanzi Writer (see "Milestones"). Vendor
-  files go in `vendor/` with their licence files and an exact version in `vendor/VERSIONS.txt`.
+- **Runtime libraries** live in `vendor/` with their licence files and an exact version in
+  `vendor/VERSIONS.txt`; never from a CDN. Vendor files end in `.js`.
+  - **Hanzi Writer 3.7.3** (MIT): `vendor/hanzi-writer.esm.js` = the package's `dist/index.esm.js`
+    unchanged (self-contained ES module). Animates strokes and quizzes writing. Always pass
+    `charDataLoader` with the app's own data: the library's default loader fetches a CDN.
 - **Dev-only tools:** Node 22 (`node --test`, no test library); `playwright` 1.63.0 pinned in
   `package.json` for the browser test and the icons. Nothing is shipped from `node_modules/`.
 
@@ -46,10 +49,42 @@ app can be copied to the other:
 - From **Hanzi Grid**: `js/core/extract.js` (the lesson and reply reader), `js/core/pinyin.js`,
   `js/core/listedit.js`, `data/common3500.txt`, `data/font-chars.txt`, `fonts/` (the two subset
   fonts, licences), `prompts/`, their tests and fixtures. Unchanged.
-- New here: `js/core/lists.js`, `js/data/{chars,sample}.js`, `js/ui/files.js`,
-  `js/screens/{import,list-detail}.js`, `js/screens/practice/recall.js`, `css/screens/hanzi.css`,
-  `tools/{update-sw,make-icons}.mjs`, `icons/`, the tests in `tests/unit/{lists,session}.test.js`
-  and `tests/e2e/flows.mjs`.
+- New here: `js/core/{lists,strokes}.js`, `js/data/{chars,sample,strokes}.js`,
+  `js/ui/{files,strokes}.js`, `js/screens/{import,list-detail}.js`,
+  `js/screens/practice/{recall,write}.js`, `css/screens/hanzi.css`,
+  `tools/{update-sw,make-icons,make-strokes}.mjs`, `icons/`, `data/strokes/`, the tests in
+  `tests/unit/{lists,session,strokes}.test.js` and `tests/e2e/flows.mjs`.
+
+## Stroke order (data and rules)
+
+- **Source:** animCJK `graphicsZhHans.txt` (simplified Chinese, mainland-China stroke order),
+  GitHub `parsimonhi/animCJK`, commit `c63765b150cbd567c71d05cf4a4f8d00b57045c9`, SHA-256
+  pinned in `tools/make-strokes.mjs`. It derives from Make Me a Hanzi and the Arphic KaiTi fonts.
+  **Arphic Public License**: `data/strokes/ARPHICPL.TXT` unchanged, `data/strokes/README.txt`
+  says how and when the data was changed, and the data stays freely available in the public
+  repo (the same duties as the KaiTi font). The two candidate sources (animCJK and
+  `hanzi-writer-data` 2.0.1) differ on 10 of the 3,500 characters: 冉肠盖甥衙滚潇慧翰髓.
+- **What ships:** the 3,500 common characters (`data/common3500.txt`), all covered, about
+  9 MB: `data/strokes/<block>.json`, one file per 256 code points (`4e.json` = U+4E00–U+4EFF),
+  mapping a character to `{ s: [SVG path per stroke], m: [[x, y] points per stroke] }`;
+  `data/stroke-chars.txt` lists the characters with data. Coordinates: a 1024-unit box, y up,
+  top at 900, bottom at −124 (`glyphTransform` in `js/core/strokes.js` draws it). Rebuild with
+  `node tools/make-strokes.mjs` (the source is cached in `tools/cache/`, not in git).
+- **Loading:** `js/data/strokes.js` fetches one block file at a time, once, from the service
+  worker's cache; `strokeChars()` gives the Set of characters with data.
+- **Strokes sheet** (`showStrokes(word)` in `js/ui/strokes.js`): a picker of the word's
+  characters, a 田字格 with the character animating (outline shown), Play again, One stroke at a
+  time, Slower, the numbered diagram (cell i = strokes 0..i, the newest red with its number at
+  the start of its median), and the note that the order is the mainland standard. Opened from
+  the entry sheet on the list page and from the pencil on the back of a recall card.
+- **Writing mode** (`write`): cards for entries in scope whose word has 1–4 Chinese characters
+  all with data (`writableChars`; a card remembers its `chars`). One 田字格 per character; the
+  quiz runs on one character at a time (`leniency`, `showHintAfterMisses` from the settings,
+  backwards strokes refused). Grading: no mistakes and no outline → right; mistakes, the
+  outline or a hint → correct but `hinted` (keeps the box); three automatic hints, or "Can't
+  remember" (the strokes are then animated) → wrong. The stroke data of a session's cards is
+  fetched once in `practice.js` and passed as `ctx.strokes`. `touch-action: none` on the box so
+  drawing never scrolls.
 
 ## Hosting and offline
 
@@ -138,9 +173,11 @@ restored after iOS evicts the app; modals from the bottom).
 
 - **Scope:** `words` = entries at depth 0 (words and sentences), `chars` = depth ≥ 1, `all`.
 - **Modes:** `recall` (Word → Pinyin & meaning) makes one card per entry in scope;
-  `recallReverse` (Pinyin & meaning → Word) only for entries with pinyin or meaning. Cards are
-  `{ listId, type: 'recall', itemId, dir: 'word' | 'meaning' }`. Both directions update the same
-  progress record; the worst outcome of an entry's cards in a session counts.
+  `recallReverse` (Pinyin & meaning → Word) only for entries with pinyin or meaning; `write`
+  (Write the characters) only for words of 1–4 characters with stroke data. Cards are
+  `{ listId, type: 'recall', itemId, dir: 'word' | 'meaning' }` or
+  `{ listId, type: 'write', itemId, chars }`. Every type updates the same progress record; the
+  worst outcome of an entry's cards in a session counts.
 - **Review (Today):** cards due now across all lists. An entry that has ever been practised comes
   back whatever the scope setting; never-practised entries count only inside the scope. Entries
   being learned come before brand-new ones; the limit is `reviewLimit`; each card gets a random
@@ -155,42 +192,32 @@ restored after iOS evicts the app; modals from the bottom).
 index.html, manifest.webmanifest, sw.js
 css/app.css, css/screens/*.css           design system; hanzi.css = fonts + Chinese pieces
 js/app.js                                boot: database, settings, theme, router, service worker
-js/core/   extract.js pinyin.js listedit.js (Hanzi Grid) · util.js srs.js text.js (Vocab Studio) · lists.js (new)
-js/data/   db.js store.js chars.js sample.js
-js/ui/     dom.js components.js icons.js router.js viewport.js clipboard.js files.js
+js/core/   extract.js pinyin.js listedit.js (Hanzi Grid) · util.js srs.js text.js (Vocab Studio) · lists.js strokes.js (new)
+js/data/   db.js store.js chars.js sample.js strokes.js
+js/ui/     dom.js components.js icons.js router.js viewport.js clipboard.js files.js strokes.js
 js/screens/ today.js lists.js import.js list-detail.js settings.js index.js
-js/screens/practice/ session.js practice.js recall.js results.js
-fonts/ data/ prompts/ icons/
+js/screens/practice/ session.js practice.js recall.js write.js results.js
+vendor/ hanzi-writer.esm.js (+ licence, VERSIONS.txt)
+fonts/ data/ (common3500, font-chars, strokes/, stroke-chars) prompts/ icons/
 tests/unit/*.test.js (npm test) · tests/e2e/flows.mjs (npm run e2e) · tests/fixtures/
-tools/ serve.mjs update-sw.mjs make-icons.mjs
+tools/ serve.mjs update-sw.mjs make-icons.mjs make-strokes.mjs (cache in tools/cache/, not in git)
 ```
 
 Browser test (`tests/e2e/flows.mjs`): serves the app at `http://localhost:8123/CHINESE-PRACTICE-1/`
 (the GitHub Pages path), Chromium at iPhone size: onboarding → sample list → a full recall
-session → results → Today stats → paste Bài 7 → manifest id → service worker cache prefix →
+session → results → Today stats → paste Bài 7 → the Strokes sheet (牛 has 4 diagram cells) →
+a writing card drawn stroke by stroke along the data's medians with the mouse (reads the
+writer's SVG transform, so it tests the real quiz) → manifest id → service worker cache prefix →
 other apps' caches untouched → offline reload with the KaiTi font. Screenshots in `tests/output/`.
 
 ## Milestones
 
-1. **Shell and recall cards** — done (this version): lists from Hanzi Grid files or paste, two
-   recall modes, spaced repetition, Today, backup, offline, tests.
-2. **Strokes.** Stroke-order animation for any character and a **Write the character** mode
-   checked stroke by stroke. Decisions taken with the owner:
-   - Library: **Hanzi Writer 3.7.3** (MIT), its self-contained ES module vendored as
-     `vendor/hanzi-writer.esm.js` (minify once with esbuild, write the command in
-     `vendor/VERSIONS.txt`). Always pass `charDataLoader`: the default loader fetches a CDN.
-   - Data: **animCJK** `graphicsZhHans.txt` (mainland stroke order), GitHub commit `c63765b`,
-     Arphic Public License (`vendor/ARPHICPL.TXT`; say how and when the data was changed; keep it
-     freely available in the public repo). Scope: the **3,500 common characters** (all covered;
-     about 9 MB). A dev script `tools/make-strokes.mjs` writes `data/strokes/<block>.json`
-     (one file per 256 code points, { char: { strokes, medians } }) and `data/stroke-chars.txt`.
-     Fallback if the quiz grades badly on this data: `hanzi-writer-data` 2.0.1 (npm), same
-     format. The two sources differ on 10 of the 3,500: 冉肠盖甥衙滚潇慧翰髓.
-   - UI: a Strokes sheet from any character (animate, replay, slower, one stroke at a time, a
-     numbered diagram row drawn from the same paths); mode `write`: the learner draws each stroke
-     in a 田字格, wrong strokes are refused, a hint after three misses, outline trace option;
-     result: no mistakes = right, with hints = hinted, too many = wrong. Characters without data
-     fall back to draw-and-grade-yourself.
+1. **Shell and recall cards** — done: lists from Hanzi Grid files or paste, two recall modes,
+   spaced repetition, Today, backup, offline, tests.
+2. **Strokes** — done: the Strokes sheet and the writing mode (see "Stroke order"), Hanzi
+   Writer vendored, the data pipeline, settings for hints, strictness and tracing. Not built:
+   a draw-and-grade-yourself fallback for characters without data (the writing mode simply
+   skips such words; all 3,500 common characters have data).
 3. **Typed pinyin and tones** (letters plus a five-key tone bar, tone numbers accepted; graded
    per syllable with `splitPinyin`), **pick the character** (distractors from the same lesson),
    **audio** (iPhone's offline Chinese voices; `speech.js` from Vocab Studio with a `zh` filter).

@@ -2,14 +2,17 @@
 // under it). params: { listId }
 import { h } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
-import { screen, section, row, segmented, emptyState, actionSheet, confirm, sheet, toast } from '../ui/components.js';
+import { screen, section, row, button, segmented, emptyState, actionSheet, confirm, sheet, toast } from '../ui/components.js';
 import { push, pop } from '../ui/router.js';
 import { saveFile } from '../ui/files.js';
+import { showStrokes } from '../ui/strokes.js';
 import * as store from '../data/store.js';
 import { charSets } from '../data/chars.js';
+import { strokeChars } from '../data/strokes.js';
 import { isDue, boxLabel, summary, newProgress } from '../core/srs.js';
-import { toLessonText, safeFileName } from '../core/extract.js';
+import { toLessonText, safeFileName, chineseChars } from '../core/extract.js';
 import { countLabel, charWarnings, pinyinLabel } from '../core/lists.js';
+import { writableChars } from '../core/strokes.js';
 import { debounce, startOfDay, DAY } from '../core/util.js';
 import { MODES, SCOPES, practiceEntries, hasSideB } from './practice/session.js';
 import { entryRow } from './import.js';
@@ -56,7 +59,8 @@ export default async function create(params, ctx = {}) {
     const s = screen({ title: 'List', back: { label: ctx.backLabel || 'Back' }, body: [emptyState({ icon: 'books', title: 'List not found', message: 'It may have been deleted.' })] });
     return { el: s.el, title: 'List', missing: true };
   }
-  const sets = await charSets();
+  const [sets, strokeSet] = await Promise.all([charSets(), strokeChars()]);
+  const hasStrokes = (word) => [...chineseChars(word || '')].some((c) => strokeSet.has(c));
 
   const s = screen({
     title: list.name,
@@ -101,10 +105,12 @@ export default async function create(params, ctx = {}) {
       }),
     );
     const sideB = pool.filter(hasSideB).length;
+    const writable = pool.filter((e) => writableChars(e.word, strokeSet)).length;
     const modeRows = [
       scopeRow,
       row({ icon: MODES.recall.icon, iconBg: MODES.recall.color, title: MODES.recall.label, subtitle: `${MODES.recall.short} · ${pool.length} cards`, onTap: () => push('practice', { listId: list.id, mode: 'recall' }, { modal: true }) }),
       row({ icon: MODES.recallReverse.icon, iconBg: MODES.recallReverse.color, title: MODES.recallReverse.label, subtitle: `${MODES.recallReverse.short} · ${sideB} cards`, onTap: () => push('practice', { listId: list.id, mode: 'recallReverse' }, { modal: true }) }),
+      row({ icon: MODES.write.icon, iconBg: MODES.write.color, title: MODES.write.label, subtitle: `${MODES.write.short} · ${writable} cards`, onTap: () => push('practice', { listId: list.id, mode: 'write' }, { modal: true }) }),
     ];
     if (sum.due && sum.due < sum.total) modeRows.push(row({ icon: 'flame', iconBg: 'var(--orange)', title: 'Review what is due', subtitle: `${sum.due} of these cards are due now`, onTap: () => push('practice', { mode: 'review' }, { modal: true }) }));
 
@@ -133,6 +139,7 @@ export default async function create(params, ctx = {}) {
       { class: 'es-body' },
       h('div', { class: 'es-word kai', lang: 'zh' }, entry.word),
       h('div', { class: 'es-print print', lang: 'zh' }, entry.word),
+      hasStrokes(entry.word) ? h('div', { class: 'es-actions' }, button({ label: 'Strokes', icon: 'pencil', variant: 'tinted', onTap: () => showStrokes(entry.word) })) : null,
       h('div', { class: 'rc-row' }, pinyinNode(entry, 'rc-pinyin'), entry.meaning ? h('div', { class: 'rc-meaning' }, entry.meaning) : null),
       entry.unsure ? h('div', { class: 'rc-unsure' }, 'The AI was not sure about this line: check it.') : null,
       warning ? h('div', { class: ['ent-warn', warning.red && 'red'] }, warning.text) : null,

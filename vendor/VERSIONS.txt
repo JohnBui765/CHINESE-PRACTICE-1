@@ -1,0 +1,9 @@
+Runtime libraries (never loaded from a CDN; copied into this folder with their licences)
+
+hanzi-writer 3.7.3 (MIT, LICENSE-hanzi-writer.txt)
+  hanzi-writer.esm.js = dist/index.esm.js of the npm package, unchanged (a self-contained ES
+  module, no bare imports). Animates stroke order and quizzes stroke-by-stroke writing.
+  The library's default character loader fetches a CDN; the app always passes charDataLoader
+  with its own data (data/strokes/), so no request ever leaves the app's own files.
+
+Stroke data (not a library): see data/strokes/README.txt.

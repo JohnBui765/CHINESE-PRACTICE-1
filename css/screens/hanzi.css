@@ -236,13 +236,21 @@
   font-size: 12px;
   color: var(--label-2);
 }
+/* The "what to practise" control on its own full-width line, so its labels are never cut. */
 .ld-scope {
+  display: block;
   padding: 10px 16px 12px;
 }
 .ld-scope-title {
   margin-bottom: 8px;
   font-size: 15px;
   font-weight: 600;
+}
+.ld-scope .segmented { width: 100%; }
+.es-actions {
+  display: flex;
+  justify-content: center;
+  margin: 10px 0 4px;
 }
 
 /* The entry sheet: the word large, then its details. */
@@ -298,3 +306,123 @@
   color: var(--orange-text);
 }
 .imp-preview { margin-top: 16px; }
+
+/* ---------- stroke order: boxes, diagram, the Strokes sheet ---------- */
+
+.sk-box {
+  position: relative;
+  flex: none;
+}
+.sk-box .sk-grid {
+  position: absolute;
+  inset: 0;
+}
+.sk-target {
+  position: absolute;
+  inset: 0;
+  touch-action: none; /* drawing must not scroll the page */
+}
+.sk-target svg { display: block; }
+.sk-sheet {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 2px 0 16px;
+}
+.sk-picker {
+  width: 100%;
+  max-width: 320px;
+  margin-bottom: 12px;
+  font-size: 20px;
+}
+.sk-title {
+  margin-top: 10px;
+  font-size: 15px;
+  color: var(--label-2);
+  text-align: center;
+}
+.sk-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 12px;
+}
+.sk-diagram-host {
+  width: 100%;
+  margin-top: 16px;
+}
+.sk-diagram {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+}
+.sk-cell {
+  flex: none;
+  border-radius: 6px;
+  background: var(--card);
+}
+.sk-num {
+  font: 700 9px var(--font);
+  fill: #fff;
+}
+.sk-note {
+  margin: 14px 0 0;
+  font-size: 13px;
+  color: var(--label-3);
+  text-align: center;
+}
+.rc-strokes { flex: none; }
+
+/* ---------- writing card ---------- */
+
+.wr {
+  padding: 16px 16px 20px;
+  border-radius: var(--radius-lg);
+  background: var(--card);
+  box-shadow: var(--shadow-card);
+}
+.wr-prompt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 14px;
+  text-align: center;
+}
+.wr-boxes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+.wr-active .sk-grid rect { stroke: var(--accent); }
+.wr-status {
+  min-height: 20px;
+  margin-top: 12px;
+  font-size: 15px;
+  color: var(--label-2);
+  text-align: center;
+}
+.wr-status.wrong { color: var(--red-text); }
+.wr-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 10px;
+}
+.wr-answer {
+  margin-top: 14px;
+  text-align: center;
+}
+.wr-answer .kai {
+  font-size: 44px;
+  line-height: 1.15;
+}
+.wr-answer-sub {
+  margin-top: 4px;
+  font-size: 16px;
+  color: var(--label-2);
+}

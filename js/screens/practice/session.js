@@ -3,11 +3,13 @@
 // list's lastPracticedAt. Taken from Vocab Studio and cut down to recall cards.
 import { shuffle, uid } from '../../core/util.js';
 import { newProgress, practise, dueItems } from '../../core/srs.js';
+import { writableChars } from '../../core/strokes.js';
 import * as store from '../../data/store.js';
 
 export const MODES = {
   recall: { key: 'recall', label: 'Word → Pinyin & meaning', short: 'See the characters, recall the rest', icon: 'cards', color: 'var(--accent)' },
-  recallReverse: { key: 'recallReverse', label: 'Pinyin & meaning → Word', short: 'Recall the characters, then check', icon: 'pencil', color: 'var(--purple)' },
+  recallReverse: { key: 'recallReverse', label: 'Pinyin & meaning → Word', short: 'Recall the characters, then check', icon: 'eye', color: 'var(--purple)' },
+  write: { key: 'write', label: 'Write the characters', short: 'Draw every stroke in order', icon: 'pencil', color: 'var(--teal)' },
   review: { key: 'review', label: 'Review', short: 'Words due today', icon: 'flame', color: 'var(--orange)' },
 };
 
@@ -41,12 +43,24 @@ export function practiceEntries(list, scope = 'words') {
 export const hasSideB = (entry) => !!(String(entry?.pinyin || '').trim() || String(entry?.meaning || '').trim());
 
 // Cards for one list and mode. `itemIds` limits them to those entries (e.g. the mistakes).
-export function buildCards(list, mode, { itemIds = null, scope = 'words', rng = Math.random } = {}) {
-  const dir = mode === 'recallReverse' ? 'meaning' : 'word';
-  const keep = (e) => (!itemIds || itemIds.includes(e.id)) && (dir === 'word' || hasSideB(e));
-  const cards = practiceEntries(list, scope)
-    .filter(keep)
-    .map((e) => ({ listId: list.id, type: 'recall', itemId: e.id, dir }));
+// The writing mode needs `strokeChars` (the Set of characters with stroke data): only words of
+// 1 to 4 characters that all have data get a card, which remembers its characters.
+export function buildCards(list, mode, { itemIds = null, scope = 'words', rng = Math.random, strokeChars = null } = {}) {
+  const wanted = (e) => !itemIds || itemIds.includes(e.id);
+  let cards;
+  if (mode === 'write') {
+    cards = [];
+    for (const e of practiceEntries(list, scope)) {
+      if (!wanted(e)) continue;
+      const chars = writableChars(e.word, strokeChars);
+      if (chars) cards.push({ listId: list.id, type: 'write', itemId: e.id, chars });
+    }
+  } else {
+    const dir = mode === 'recallReverse' ? 'meaning' : 'word';
+    cards = practiceEntries(list, scope)
+      .filter((e) => wanted(e) && (dir === 'word' || hasSideB(e)))
+      .map((e) => ({ listId: list.id, type: 'recall', itemId: e.id, dir }));
+  }
   return shuffle(cards, rng);
 }
 

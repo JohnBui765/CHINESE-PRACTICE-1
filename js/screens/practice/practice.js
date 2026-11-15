@@ -6,10 +6,12 @@ import { icon } from '../../ui/icons.js';
 import { button, progressBar, emptyState, alert, iconButton, hasOpenOverlay, toast } from '../../ui/components.js';
 import { pop, replace } from '../../ui/router.js';
 import * as store from '../../data/store.js';
+import { strokeChars as loadStrokeChars, strokeData } from '../../data/strokes.js';
 import { MODES, buildCards, buildReviewCards, createSession, currentCard, answer, isFinished, progressFraction, commit, summarize, getSnapshot, clearSnapshot, liveCards, cardResolves, recoverSnapshot, commitPausedSession, hasSideB } from './session.js';
 import * as recall from './recall.js';
+import * as write from './write.js';
 
-const RENDERERS = { recall };
+const RENDERERS = { recall, write };
 const PRAISE = ['Correct!', 'Nice!', 'Great!', 'Well done!', 'Spot on!'];
 // After the footer changes (Show answer → grade buttons, a new card), taps are ignored this long:
 // the second tap of a double tap would otherwise hit the button that just took the first one's place.
@@ -64,11 +66,20 @@ export default async function create(params) {
       emptyMessage = { title: 'List not found', message: 'It may have been deleted.' };
     } else {
       lists.set(list.id, list);
-      const cards = buildCards(list, params.mode, { itemIds: params.itemIds || null, scope: params.scope || settings.scope });
+      const strokeChars = params.mode === 'write' ? await loadStrokeChars() : null;
+      const cards = buildCards(list, params.mode, { itemIds: params.itemIds || null, scope: params.scope || settings.scope, strokeChars });
       if (cards.length) session = createSession({ mode: params.mode, listId: list.id, title: list.name, cards });
-      else if (params.mode === 'recallReverse') emptyMessage = { title: 'No pinyin or meanings yet', message: 'This mode shows the pinyin and meaning first. Add them to the list (Edit list), then try again.', icon: 'pencil' };
+      else if (params.mode === 'recallReverse') emptyMessage = { title: 'No pinyin or meanings yet', message: 'This mode shows the pinyin and meaning first. Add them to the list (Edit list), then try again.', icon: 'eye' };
+      else if (params.mode === 'write') emptyMessage = { title: 'Nothing to write here', message: 'Writing works for words of 1 to 4 characters that have stroke data (the 3,500 common characters). Change what to practise, or pick another list.', icon: 'pencil' };
       else emptyMessage = { title: 'Nothing to practise', message: 'Change what to practise (Words, Characters or All) on the list page.' };
     }
+  }
+
+  // The stroke data of the writing cards, fetched once here so a card never waits for it.
+  const strokes = new Map();
+  if (session) {
+    const chars = new Set(session.queue.filter((c) => c.type === 'write').flatMap((c) => c.chars || []));
+    await Promise.all([...chars].map(async (ch) => strokes.set(ch, await strokeData(ch))));
   }
 
   /* ---------- layout ---------- */
@@ -159,6 +170,7 @@ export default async function create(params) {
       item,
       entries: list.entries,
       settings: store.settings(),
+      strokes,
       retry: card.retry,
       rng: Math.random,
       setReady: (ready) => {

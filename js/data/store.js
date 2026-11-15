@@ -11,6 +11,9 @@ export const DEFAULT_SETTINGS = Object.freeze({
   reviewLimit: 20, // most cards in one Today review
   autoAdvance: 0, // 0 = off, else seconds after a graded card before the next one comes by itself
   showPrint: true, // show the print (screen) form under the KaiTi form on cards
+  writeOutline: false, // writing mode: start every character with a faint outline to trace
+  writeHintAfter: 3, // writing mode: show the stroke after this many misses (0 = never)
+  writeLeniency: 1, // writing mode: Hanzi Writer leniency (1.5 lenient, 1 normal, 0.7 strict)
 });
 
 const APP_ID = 'chinese-practice-1';
