@@ -2,14 +2,19 @@
 // each character in a 田字格, in order. Hanzi Writer checks every stroke (place, shape,
 // direction). A wrong stroke is refused; after some misses the right stroke lights up as a hint.
 // Result: no mistakes and no outline = right; mistakes, the outline or a hint = correct but
-// hinted (the card keeps its box); "Can't remember", or three hints, = wrong.
+// hinted (the card keeps its box); "Can't remember", or three hints, = wrong. A card that was
+// not perfect offers "Learn it": the word page opens on its writing practice.
 import { h } from '../../ui/dom.js';
 import { button } from '../../ui/components.js';
-import { gridBox, makeWriter } from '../../ui/strokes.js';
+import { gridBox, borrowWriter } from '../../ui/strokes.js';
+import { showWord } from '../../ui/word.js';
 import { pinyinLabel } from '../../core/lists.js';
 import { pinyinNode } from './recall.js';
 
 const MAX_HINTS = 3;
+// The card slides out for about this long after the next one is shown; its writers go back to
+// the pool (ui/strokes.js) only then, so it never turns blank while it is still visible.
+const RELEASE_MS = 450;
 
 export function boxSize(count) {
   const width = Math.min(typeof innerWidth === 'number' ? innerWidth : 390, 430) - 64;
@@ -32,6 +37,7 @@ export function render(card, ctx) {
   let result = null;
   let gaveUp = false;
   const writers = [];
+  const leases = []; // the writers, borrowed from the pool
 
   const boxes = chars.map((ch, i) => {
     const b = gridBox(size, { className: i === 0 ? 'wr-active' : '' });
@@ -41,6 +47,8 @@ export function render(card, ctx) {
   });
   const status = h('div', { class: 'wr-status', 'aria-live': 'polite' });
   const outlineBtn = button({ label: traceAll ? 'Outline on' : 'Show outline', icon: 'eye', variant: 'plain', size: 'small', onTap: () => toggleOutline() });
+  const learnBtn = button({ label: 'Learn it', icon: 'pencil', variant: 'tinted', size: 'small', onTap: () => showWord(item, { entries: ctx.list?.entries || [], drill: true }) });
+  learnBtn.hidden = true;
   const answer = h('div', { class: 'wr-answer', hidden: true }, h('div', { class: 'kai', lang: 'zh' }, item.word), h('div', { class: 'wr-answer-sub' }, [pinyinLabel(item), item.meaning].filter(Boolean).join(' · ')));
   const el = h(
     'div',
@@ -48,7 +56,7 @@ export function render(card, ctx) {
     h('div', { class: 'wr-prompt' }, h('div', { class: 'rc-front-label' }, 'Write the characters'), pinyinNode(item, 'rc-pinyin'), item.meaning ? h('div', { class: 'rc-meaning' }, item.meaning) : null),
     h('div', { class: 'wr-boxes' }, boxes.map((b) => b.el)),
     status,
-    h('div', { class: 'wr-controls' }, outlineBtn),
+    h('div', { class: 'wr-controls' }, outlineBtn, learnBtn),
     answer,
   );
 
@@ -74,7 +82,9 @@ export function render(card, ctx) {
       say('No stroke data for this character.', true);
       return finish();
     }
-    const writer = makeWriter(boxes[i].target, chars[i], data, { size, outline: outlineShown, character: false });
+    const lease = borrowWriter(boxes[i], chars[i], data, { size, outline: outlineShown });
+    leases.push(lease);
+    const writer = lease.writer;
     writers[i] = writer;
     say(`${chars.length > 1 ? `Character ${i + 1} of ${chars.length} · ` : ''}stroke 1 of ${total()}`);
     writer.quiz({
@@ -114,6 +124,7 @@ export function render(card, ctx) {
       ? { correct: false, feedback: { title: 'The app had to show the strokes', detail: `${mistakes} wrong ${mistakes === 1 ? 'stroke' : 'strokes'} · ${hints} shown` } }
       : { correct: true, hinted: helped || mistakes > 0, feedback: { title: mistakes === 0 && !helped ? 'Perfect strokes!' : 'Done — with some help', detail: mistakes ? `${mistakes} wrong ${mistakes === 1 ? 'stroke' : 'strokes'}` : outlineShown ? 'Traced over the outline' : '' } };
     showAnswer();
+    learnBtn.hidden = result.correct && !result.hinted;
     say(result.correct ? 'All strokes done.' : 'Look at the strokes again.', !result.correct);
     if (settings.autoSpeak && ctx.speak) ctx.speak(item.word);
     ctx.submit();
@@ -135,10 +146,15 @@ export function render(card, ctx) {
       }
     });
     chars.forEach((ch, i) => {
-      if (!writers[i] && datas[i]) writers[i] = makeWriter(boxes[i].target, ch, datas[i], { size, outline: false, character: false });
+      if (!writers[i] && datas[i]) {
+        const lease = borrowWriter(boxes[i], ch, datas[i], { size, outline: false });
+        leases.push(lease);
+        writers[i] = lease.writer;
+      }
       writers[i]?.animateCharacter();
     });
     showAnswer();
+    learnBtn.hidden = false;
     result = { correct: false, feedback: { title: 'Watch the strokes', detail: [pinyinLabel(item), item.meaning].filter(Boolean).join(' · ') } };
     return result;
   }
@@ -163,6 +179,7 @@ export function render(card, ctx) {
           /* no quiz */
         }
       });
+      setTimeout(() => leases.forEach((lease) => lease.release()), RELEASE_MS);
     },
   };
 }

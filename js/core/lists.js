@@ -3,6 +3,7 @@
 // exampleMeaning, ...) plus an id that the practice progress is keyed by.
 import { chineseChars, isSentence } from './extract.js';
 import { uid } from './util.js';
+import { stripAccents } from './text.js';
 
 export const entryKey = (e) => `${Number(e?.depth) || 0}|${e?.word ?? ''}`;
 
@@ -86,4 +87,92 @@ export function charWarnings(text, sets) {
     else if (sets.common && !sets.common.has(ch)) out.rare.push(ch);
   }
   return out;
+}
+
+/* ---------- finding a word ---------- */
+
+// Lowercase, accent-free, single-spaced, so "Nǐ hǎo" matches "ni hao".
+export const fold = (s) => stripAccents(String(s ?? '').toLowerCase()).replace(/\s+/g, ' ').trim();
+
+// Pinyin as bare letters, so tones, spaces, apostrophes and tone numbers never matter: "Nǐ hǎo",
+// "ni3 hao3" and "nihao" are all "nihao". ü counts as u, and so do u: and the v typed for it
+// after n or l (nv, lv: the only places ü is written as v), so "tv" or "van" stay English.
+export const pinyinLetters = (s) =>
+  fold(String(s ?? '').replace(/u:/gi, 'u'))
+    .replace(/([nl])v/g, '$1u')
+    .replace(/[^a-z]/g, '');
+
+// The words of a meaning, for matching: "(measure word for books)" -> " measure word for books".
+const meaningWords = (s) => ` ${fold(s).replace(/[^a-z0-9']+/g, ' ').trim()}`;
+// "to go" and "go", "a book" and "book" mean the same here.
+const bare = (s) => s.replace(/^(to|a|an|the) /, '');
+
+// How well an entry matches what was typed: 0 exactly, 1 at the start of its pinyin or of a word
+// of its meaning, 2 somewhere inside (3 letters or more), -1 not at all. Chinese characters in
+// the query are looked for in the word; letters in the pinyin (tones optional) and the meaning.
+export function matchEntry(entry, query) {
+  const q = String(query ?? '').trim();
+  if (!q || !entry) return -1;
+  const zh = chineseChars(q);
+  if (zh) {
+    const word = chineseChars(entry.word || '');
+    if (word === zh) return 0;
+    if (word.startsWith(zh)) return 1;
+    return word.includes(zh) ? 2 : -1;
+  }
+  let best = -1;
+  const take = (rank) => {
+    if (best < 0 || rank < best) best = rank;
+  };
+  const letters = pinyinLetters(q);
+  if (letters) {
+    for (const p of [entry.pinyin, entry.said]) {
+      const have = pinyinLetters(p);
+      if (!have) continue;
+      if (have === letters) take(0);
+      else if (have.startsWith(letters)) take(1);
+      else if (letters.length >= 3 && have.includes(letters)) take(2);
+    }
+  }
+  const words = meaningWords(q).trim();
+  if (words && entry.meaning) {
+    const meaning = meaningWords(entry.meaning);
+    const parts = String(entry.meaning)
+      .split(/[;,/]/)
+      .map((p) => bare(meaningWords(p).trim()))
+      .filter(Boolean);
+    if (parts.includes(bare(words))) take(0);
+    else if (meaning.includes(` ${words}`)) take(1);
+    else if (words.length >= 3 && meaning.includes(words)) take(2);
+  }
+  return best;
+}
+
+// The words that match a search across lists, best first: [{ word, entry, list, lists, rank }].
+// A word that is in several lists (or several times in one, like 国 under 中国 and 法国) is one
+// result; `lists` names every list it is in, `entry` and `list` are where it matched best. A
+// character with two readings (行 xíng, 行 háng) gives a result for each.
+// Ties keep the order of `lists` (most recently updated first), then the lesson order.
+export function searchWords(lists, query, { limit = 40 } = {}) {
+  const groups = new Map();
+  let order = 0;
+  for (const list of lists || []) {
+    for (const entry of list?.entries || []) {
+      order += 1;
+      const rank = matchEntry(entry, query);
+      if (rank < 0) continue;
+      const key = `${entry.word}|${pinyinLetters(entry.pinyin)}`;
+      const found = groups.get(key);
+      if (!found) {
+        groups.set(key, { word: entry.word, entry, list, lists: [{ id: list.id, name: list.name }], rank, order });
+        continue;
+      }
+      if (!found.lists.some((l) => l.id === list.id)) found.lists.push({ id: list.id, name: list.name });
+      if (rank < found.rank) Object.assign(found, { entry, list, rank });
+    }
+  }
+  return [...groups.values()]
+    .sort((a, b) => a.rank - b.rank || a.order - b.order)
+    .slice(0, limit)
+    .map(({ word, entry, list, lists: inLists, rank }) => ({ word, entry, list, lists: inLists, rank }));
 }

@@ -1,15 +1,11 @@
-// Stroke order on screen: a 田字格 box with a Hanzi Writer inside (animation or writing quiz),
-// the numbered stroke-order diagram, and the Strokes sheet opened from cards and list entries.
+// Stroke order on screen: a 田字格 box with a Hanzi Writer inside (animation or writing quiz), the
+// numbered stroke-order diagram and a still model of a character. The word page (ui/word.js) and
+// the writing practice (ui/drill.js, practice/write.js) are built from these.
 // Hanzi Writer always gets the app's own data through charDataLoader (its default would fetch
 // a CDN, which this app never does).
 import HanziWriter from '../../vendor/hanzi-writer.esm.js';
 import { h, svg } from './dom.js';
-import { button, segmented, sheet, toast } from './components.js';
-import { speak } from './speech.js';
-import { strokeData } from '../data/strokes.js';
-import { settings } from '../data/store.js';
 import { glyphTransform, glyphPoint, diagramSteps } from '../core/strokes.js';
-import { chineseChars } from '../core/extract.js';
 
 export function isDark() {
   const theme = document.documentElement.dataset.theme;
@@ -49,14 +45,18 @@ export function gridBox(size, { className = '' } = {}) {
   return { el, target };
 }
 
-// A Hanzi Writer for one character, drawing with the app's data. `data` = { strokes, medians }.
+// A Hanzi Writer for one character, drawing with the app's data. `data` = { strokes, medians },
+// or a function that returns it (a pooled writer reads its current character's data).
 export function makeWriter(target, char, data, { size, outline = false, character = false, speed = 1, delay = 450, drawingWidth } = {}) {
   const c = colours();
   return HanziWriter.create(target, char, {
     width: size,
     height: size,
     padding: Math.round(size * 0.08),
-    charDataLoader: () => ({ strokes: data.strokes, medians: data.medians }),
+    charDataLoader: () => {
+      const d = typeof data === 'function' ? data() : data;
+      return { strokes: d.strokes, medians: d.medians };
+    },
     showOutline: outline,
     showCharacter: character,
     strokeColor: c.stroke,
@@ -97,78 +97,78 @@ export function diagramRow(data, { cell = 46 } = {}) {
   );
 }
 
-// The Strokes sheet for a word: its characters as a picker, one animating in a big 田字格,
-// controls (play again, one stroke at a time, slower) and the numbered diagram.
-export async function showStrokes(word) {
-  const chars = [...chineseChars(word || '')];
-  const datas = await Promise.all(chars.map((ch) => strokeData(ch)));
-  const items = chars.map((ch, i) => ({ ch, data: datas[i] })).filter((x) => x.data);
-  if (!items.length) {
-    toast('No stroke data for this character.', { icon: 'info', tone: 'accent' });
-    return null;
+// A finished character drawn from the data (no animation): the model beside the box in the Copy
+// step of "Write it".
+export function modelGlyph(data, size) {
+  const c = colours();
+  return svg(
+    'svg',
+    { viewBox: `0 0 ${size} ${size}`, width: size, height: size, class: 'sk-model', role: 'img', 'aria-label': 'Model' },
+    ...gridLines(size, c),
+    svg('g', { transform: glyphTransform(size) }, ...data.strokes.map((d) => svg('path', { d, fill: c.stroke }))),
+  );
+}
+
+// The size of the 田字格 boxes for a word of `count` characters in `width` px: one character
+// large, at most four boxes a row (longer texts wrap).
+export function rowBoxSize(count, width, { gap = 10, single = 240, max = 170, min = 64 } = {}) {
+  const perRow = Math.max(1, Math.min(count, 4));
+  const fit = Math.floor((width - (perRow - 1) * gap) / perRow);
+  return Math.max(min, Math.min(count === 1 ? single : max, fit));
+}
+
+/* ---------- reusing writers ---------- */
+
+// Hanzi Writer 3.7.3 adds a mouseup and a touchend listener to `document` for every writer and
+// never removes them, so a writer is never freed (about 30 KB each, measured). The word page,
+// "Write it" and the writing mode therefore borrow writers and give them back, and a writer is
+// reused for the next character: setCharacter() loads it without adding listeners. One pool per
+// box size and animation speed, so the app keeps a few dozen writers at most.
+const pools = new Map(); // `${size}|${speed}|${delay}` -> free slots: { writer, target, data, dark }
+
+function repaint(slot) {
+  const dark = isDark();
+  if (slot.dark === dark) return;
+  slot.dark = dark;
+  const c = colours();
+  const colourOf = { strokeColor: c.stroke, outlineColor: c.outline, drawingColor: c.drawing, highlightColor: c.highlight, highlightCompleteColor: c.complete };
+  for (const [name, value] of Object.entries(colourOf)) slot.writer.updateColor(name, value, { duration: 0 });
+}
+
+// A writer for `char` in `box` (from gridBox), starting empty: the outline only when `outline`.
+// Returns { writer, release() }; after release() the writer must not be used again.
+export function borrowWriter(box, char, data, { size, outline = false, speed = 1, delay = 450 } = {}) {
+  const key = `${size}|${speed}|${delay}`;
+  if (!pools.has(key)) pools.set(key, []);
+  const free = pools.get(key);
+  let slot = free.pop();
+  if (slot) {
+    slot.data = data;
+    slot.writer.setCharacter(char);
+    repaint(slot);
+    if (outline) slot.writer.showOutline({ duration: 0 });
+    else slot.writer.hideOutline({ duration: 0 });
+    slot.writer.hideCharacter({ duration: 0 });
+  } else {
+    slot = { data, target: h('div', { class: 'sk-target' }), dark: isDark() };
+    slot.writer = makeWriter(slot.target, char, () => slot.data, { size, outline, character: false, speed, delay });
   }
-  const size = Math.max(200, Math.min(300, (typeof innerWidth === 'number' ? innerWidth : 390) - 64));
-  const box = gridBox(size, { className: 'sk-main' });
-  const title = h('div', { class: 'sk-title' });
-  const diagramHost = h('div', { class: 'sk-diagram-host' });
-  let current = 0;
-  let writer = null;
-  let slow = false;
-  let nextStroke = 0;
-
-  const playBtn = button({ label: 'Play again', icon: 'play', variant: 'tinted', onTap: () => animate() });
-  const stepBtn = button({ label: 'One stroke', icon: 'arrowRight', variant: 'tinted', onTap: () => step() });
-  const sayBtn = button({ label: 'Hear it', icon: 'speaker', variant: 'plain', onTap: () => {
-    const s = settings();
-    speak(items[current].ch, { rate: s.speechRate, voiceURI: s.voiceURI });
-  } });
-  const slowBtn = button({ label: 'Slower', icon: 'clock', variant: 'plain', onTap: () => {
-    slow = !slow;
-    slowBtn.querySelector('span').textContent = slow ? 'Normal speed' : 'Slower';
-    select(current);
-  } });
-  const picker = items.length > 1 ? segmented({ options: items.map((x, i) => ({ value: i, label: x.ch })), value: 0, ariaLabel: 'Character', onChange: (i) => select(i) }) : null;
-  if (picker) picker.classList.add('sk-picker', 'kai');
-
-  function stop() {
-    if (writer) {
+  box.target.replaceWith(slot.target);
+  box.target = slot.target;
+  let released = false;
+  return {
+    writer: slot.writer,
+    release() {
+      if (released) return;
+      released = true;
       try {
-        writer.pauseAnimation();
+        slot.writer.cancelQuiz();
+        slot.writer.hideCharacter({ duration: 0 }); // also ends an animation still running or paused
       } catch {
-        /* nothing running */
+        /* nothing to stop */
       }
-    }
-  }
-
-  function select(i) {
-    stop();
-    current = i;
-    const { ch, data } = items[i];
-    box.target.replaceChildren();
-    writer = makeWriter(box.target, ch, data, { size, outline: true, character: false, speed: slow ? 0.35 : 1, delay: slow ? 700 : 450 });
-    title.textContent = `${ch} · ${data.strokes.length} ${data.strokes.length === 1 ? 'stroke' : 'strokes'}`;
-    diagramHost.replaceChildren(diagramRow(data));
-    animate();
-  }
-
-  function animate() {
-    nextStroke = 0;
-    writer.animateCharacter({ onComplete: () => { nextStroke = items[current].data.strokes.length; } });
-  }
-
-  // One stroke per tap, from the start again after the last one.
-  async function step() {
-    const total = items[current].data.strokes.length;
-    if (nextStroke >= total || nextStroke === 0) {
-      await writer.hideCharacter({ duration: 0 });
-      nextStroke = 0;
-    }
-    writer.animateStroke(nextStroke);
-    nextStroke += 1;
-  }
-
-  const content = h('div', { class: 'sk-sheet' }, picker, box.el, title, h('div', { class: 'sk-controls' }, playBtn, stepBtn, slowBtn, sayBtn), diagramHost, h('p', { class: 'sk-note' }, 'Mainland China stroke order. Your textbook has the last word.'));
-  const s = sheet({ title: 'Strokes', content, onClose: () => stop() });
-  select(0);
-  return s;
+      slot.target.remove();
+      free.push(slot);
+    },
+  };
 }

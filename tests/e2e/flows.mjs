@@ -1,7 +1,9 @@
 // End-to-end check in Chromium at iPhone size: the app serves at the GitHub Pages path, the
-// sample list loads, a recall session runs to its results, a list is pasted in, the manifest id
-// resolves to the repository path, the service worker caches under the app's own prefix, the app
-// works offline, and other apps' caches are left alone. Screenshots go to tests/output/.
+// sample list loads, a recall session runs to its results, a list is pasted in, a word is found
+// and its word page shows how to write it, "Write it" runs with a deliberate mistake, every
+// practice mode runs, the manifest id resolves to the repository path, the service worker caches
+// under the app's own prefix, the app works offline, and other apps' caches are left alone.
+// Screenshots go to tests/output/.
 // Usage: node tests/e2e/flows.mjs   (needs Playwright + Chromium)
 import { spawn } from 'node:child_process';
 import { mkdir, readFile } from 'node:fs/promises';
@@ -40,6 +42,31 @@ try {
   const errors = [];
   // The router ignores taps while a screen transition runs (#app gets the class "busy").
   const idle = () => page.locator('#app:not(.busy)').waitFor({ state: 'attached' });
+  // Draws every stroke of the character in a 田字格 box along the data's centre lines, with the
+  // mouse; reads the writer's SVG transform, so the real Hanzi Writer quiz checks it.
+  // reverseFirst: draw the first stroke backwards once first (a mistake the quiz refuses).
+  const drawChar = async (box, { reverseFirst = false } = {}) => {
+    await box.locator('.sk-target svg g[transform]').first().waitFor();
+    const info = await box.evaluate(async (el) => {
+      const svgEl = el.querySelector('.sk-target svg');
+      const g = svgEl.querySelector('g[transform]');
+      const m = g.getAttribute('transform').match(/translate\(([-\d.]+),\s*([-\d.]+)\)\s*scale\(([-\d.]+),\s*([-\d.]+)\)/);
+      const r = svgEl.getBoundingClientRect();
+      const { strokeData } = await import(new URL('js/data/strokes.js', document.baseURI).href);
+      const data = await strokeData(el.dataset.char);
+      return { left: r.left, top: r.top, tx: Number(m[1]), ty: Number(m[2]), scale: Number(m[3]), medians: data.medians };
+    });
+    const line = async (median) => {
+      const pts = median.map(([x, y]) => [info.left + info.tx + x * info.scale, info.top + info.ty - y * info.scale]);
+      await page.mouse.move(pts[0][0], pts[0][1]);
+      await page.mouse.down();
+      for (const [x, y] of pts.slice(1)) await page.mouse.move(x, y, { steps: 4 });
+      await page.mouse.up();
+      await page.waitForTimeout(120);
+    };
+    if (reverseFirst) await line([...info.medians[0]].reverse());
+    for (const median of info.medians) await line(median);
+  };
   page.on('pageerror', (e) => errors.push(String(e)));
   page.on('console', (m) => {
     if (m.type() === 'error') errors.push(m.text());
@@ -97,18 +124,55 @@ try {
   await page.getByText('Bài 7').first().waitFor();
   await page.getByText('牛奶').first().waitFor();
 
-  // 4b. The Strokes sheet from an entry: 牛 has 4 strokes, so the diagram has 4 cells.
+  // 4b. The word page from an entry shows how to write it straight away: a box per character
+  // and the numbered diagram of the first (牛, 4 strokes); tapping 奶 shows its 5.
+  const entryRow = (word) => page.locator('.ent', { has: page.locator('.ent-zh', { hasText: new RegExp(`^${word}$`) }) }).first();
   await idle();
-  await page.locator('.ent', { hasText: '牛奶' }).first().click();
-  await page.getByRole('button', { name: 'Strokes' }).click();
-  await page.locator('.sk-sheet .sk-cell').first().waitFor();
-  assert.equal(await page.locator('.sk-sheet .sk-cell').count(), 4, '牛 has 4 strokes');
+  await entryRow('牛奶').click();
+  await page.locator('.wd-sheet .sk-cell').first().waitFor();
+  assert.equal(await page.locator('.wd-sheet .wd-box').count(), 2, 'a box per character');
+  assert.equal(await page.locator('.wd-sheet .sk-cell').count(), 4, '牛 has 4 strokes');
+  await page.locator('.wd-box[data-char="奶"]').click();
+  assert.equal(await page.locator('.wd-sheet .sk-cell').count(), 5, '奶 has 5 strokes');
   await page.waitForTimeout(1500);
-  await page.screenshot({ path: shot('08-strokes.png') });
+  await page.screenshot({ path: shot('08-word-page.png') });
   await page.getByRole('button', { name: 'Close' }).last().click();
-  await page.waitForTimeout(400);
+  await page.waitForTimeout(500);
+
+  // 4g. The search box on the list page keeps the entries that match: chao = 超市 and 超.
+  await page.locator('.ld-search input').fill('chao');
+  await page.waitForFunction(() => document.querySelectorAll('.ld .ent').length === 2);
+  assert.deepEqual(await page.locator('.ld .ent .ent-zh').allTextContents(), ['超市', '超']);
+
+  // 4h. Write it: trace both characters, write 超 from memory with its first stroke drawn
+  // backwards once (so the Copy step comes), copy it, write it again, then 市, then the word.
+  await entryRow('超市').click();
+  await page.getByRole('button', { name: 'Write it' }).click();
+  const writeStep = async (title, opts = {}, name = null) => {
+    // A new step has started when its title shows and its quiz is at stroke 1.
+    await page.waitForFunction((t) => document.querySelector('.dr-title')?.textContent.startsWith(t) && /Stroke 1 of/.test(document.querySelector('.dr-status')?.textContent || ''), title, { timeout: 10000 });
+    if (name) await page.screenshot({ path: shot(name) });
+    const boxes = page.locator('.dr .dr-box');
+    const n = await boxes.count();
+    for (let i = 0; i < n; i++) await drawChar(boxes.nth(i), i === 0 ? opts : {});
+  };
+  await writeStep('Trace 超', {}, '13-write-it-trace.png');
+  await writeStep('Trace 市');
+  await writeStep('From memory', { reverseFirst: true });
+  await page.getByText('Copy it once, then try again.').waitFor();
+  await writeStep('Copy 超', {}, '14-write-it-copy.png');
+  assert.equal(await page.locator('.dr-model').count(), 1, 'the model is beside the box');
+  await writeStep('From memory');
+  await writeStep('From memory');
+  await writeStep('The whole word');
+  await page.getByText('From memory after 2 tries').waitFor();
+  await page.getByText('From memory, first try').waitFor();
+  await page.getByText('The whole word from memory').waitFor();
+  await page.screenshot({ path: shot('15-write-it-done.png') });
   await page.getByRole('button', { name: 'Close' }).last().click();
-  await page.waitForTimeout(400);
+  await page.waitForTimeout(500);
+  await page.locator('.ld-search .lists-clear').click();
+  await page.waitForFunction(() => document.querySelectorAll('.ld .ent').length === 19);
 
   // 4d. Pick the characters: the tile that matches the pinyin shown is the right one.
   const lesson = new Map(); // dictionary pinyin -> word, from the Bài 7 fixture
@@ -180,27 +244,7 @@ try {
   const boxCount = await boxes.count();
   assert.ok(boxCount >= 1 && boxCount <= 4, `boxes: ${boxCount}`);
   await page.screenshot({ path: shot('09-write.png') });
-  for (let i = 0; i < boxCount; i++) {
-    const box = boxes.nth(i);
-    await box.locator('.sk-target svg g[transform]').first().waitFor();
-    const info = await box.evaluate(async (el) => {
-      const svgEl = el.querySelector('.sk-target svg');
-      const g = svgEl.querySelector('g[transform]');
-      const m = g.getAttribute('transform').match(/translate\(([-\d.]+),\s*([-\d.]+)\)\s*scale\(([-\d.]+),\s*([-\d.]+)\)/);
-      const r = svgEl.getBoundingClientRect();
-      const { strokeData } = await import(new URL('js/data/strokes.js', document.baseURI).href);
-      const data = await strokeData(el.dataset.char);
-      return { left: r.left, top: r.top, tx: Number(m[1]), ty: Number(m[2]), scale: Number(m[3]), medians: data.medians };
-    });
-    for (const median of info.medians) {
-      const pts = median.map(([x, y]) => [info.left + info.tx + x * info.scale, info.top + info.ty - y * info.scale]);
-      await page.mouse.move(pts[0][0], pts[0][1]);
-      await page.mouse.down();
-      for (const [x, y] of pts.slice(1)) await page.mouse.move(x, y, { steps: 4 });
-      await page.mouse.up();
-      await page.waitForTimeout(120);
-    }
-  }
+  for (let i = 0; i < boxCount; i++) await drawChar(boxes.nth(i));
   await page.getByText(/Perfect strokes!|Done — with some help/).waitFor();
   await page.screenshot({ path: shot('10-write-done.png') });
   await page.waitForTimeout(400);
@@ -226,6 +270,18 @@ try {
   await page.waitForTimeout(400);
   await page.locator('.screen:not(.covered) .tabbar').getByText('Lists').click();
   await idle();
+
+  // 4i. The Lists search finds words in every list (超 is chāo exactly, 超市 starts with it), and
+  // a word opens its word page.
+  await page.locator('.lists-search-input').fill('chao');
+  await page.locator('.lists-words .ent').first().waitFor();
+  assert.deepEqual(await page.locator('.lists-words .ent-zh').allTextContents(), ['超', '超市']);
+  await page.screenshot({ path: shot('16-lists-search.png') });
+  await page.locator('.lists-words .ent').nth(1).click();
+  await page.locator('.wd-sheet .wd-box[data-char="市"]').waitFor();
+  await page.getByRole('button', { name: 'Close' }).last().click();
+  await page.waitForTimeout(500);
+  await page.locator('.lists-clear').click();
 
   // 5. Manifest id, service worker cache prefix, other apps' caches, offline.
   const manifest = await (await fetch(`${BASE}manifest.webmanifest`)).json();

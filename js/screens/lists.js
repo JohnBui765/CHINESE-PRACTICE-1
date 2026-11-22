@@ -1,20 +1,19 @@
-// Lists tab: every saved list (most recently updated first) with a search field that matches
-// list names and the words, pinyin and meanings inside each list.
+// Lists tab: every saved list (most recently updated first) with a search field. A search shows
+// the matching words first (from every list: by characters, pinyin with or without tones, or
+// English; tap one for how to write it), then the lists whose names or words match.
 import { h } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { screen, section, row, badge, emptyState } from '../ui/components.js';
 import { push } from '../ui/router.js';
+import { showWord } from '../ui/word.js';
 import * as store from '../data/store.js';
 import { isDue } from '../core/srs.js';
 import { debounce, plural } from '../core/util.js';
-import { stripAccents } from '../core/text.js';
-import { countLabel } from '../core/lists.js';
+import { countLabel, fold, searchWords, pinyinLabel } from '../core/lists.js';
 
 const SEARCH_DELAY = 200;
 const HINT_MAX = 28;
-
-// Lowercase, accent-free, single-spaced, so "Nǐ hǎo" matches "ni hao".
-const fold = (s) => stripAccents(String(s ?? '').toLowerCase()).replace(/\s+/g, ' ').trim();
+const WORDS_MAX = 30;
 
 const openImport = () => push('import', {}, { modal: true });
 
@@ -115,8 +114,15 @@ export default async function create() {
 
   /* ---------- list ---------- */
 
+  const wordsSection = section({ header: 'Words', className: 'lists-words', children: [] });
+  const wordsGroup = wordsSection.querySelector('.group');
+  const wordsFooter = h('div', { class: 'section-footer' }, `The first ${WORDS_MAX} words. Type more to narrow them down.`);
+  wordsSection.appendChild(wordsFooter);
+  wordsSection.hidden = true;
+
   const listSection = section({ className: 'lists-section', children: [] });
   const group = listSection.querySelector('.group');
+  const listsHeader = h('div', { class: 'section-header' }, 'Lists');
   const countEl = h('div', { class: 'section-footer lists-count' });
   listSection.appendChild(countEl);
   const noResultsText = h('div', { class: 'lists-noresults-text' });
@@ -134,7 +140,7 @@ export default async function create() {
     tab: 'lists',
     className: 'lists-screen',
     actions: [{ icon: 'plus', ariaLabel: 'New list', onTap: openImport }],
-    body: [searchEl, listSection, noResults, empty],
+    body: [searchEl, wordsSection, listSection, noResults, empty],
   });
 
   function rowFor(entry, hint) {
@@ -158,25 +164,51 @@ export default async function create() {
     return el;
   }
 
+  // A word found by the search: its characters, pinyin and meaning, and the lists it is in.
+  function wordRow(found) {
+    const py = pinyinLabel(found.entry);
+    return row({
+      title: h('span', { class: 'ent-head' }, h('span', { class: 'ent-zh kai', lang: 'zh' }, found.word), py ? h('span', { class: 'ent-py', lang: 'zh-Latn' }, py) : null),
+      subtitle: h(
+        'span',
+        null,
+        found.entry.meaning ? h('span', { class: 'ent-mean' }, found.entry.meaning) : null,
+        h('span', { class: 'lists-word-in' }, found.lists.map((l) => l.name || 'Untitled list').join(' · ')),
+      ),
+      className: 'ent lists-word',
+      onTap: () => showWord(found.entry, { entries: found.list.entries }),
+    });
+  }
+
   function render() {
     const hasLists = entries.length > 0;
     empty.hidden = hasLists;
     searchEl.hidden = !hasLists;
     if (!hasLists) {
       listSection.hidden = true;
+      wordsSection.hidden = true;
       noResults.hidden = true;
       group.replaceChildren();
+      wordsGroup.replaceChildren();
       return;
     }
     const tokens = fold(query).split(' ').filter(Boolean);
+    // One more than shown, to know whether there are more.
+    const found = tokens.length ? searchWords(entries.map((e) => e.list), query, { limit: WORDS_MAX + 1 }) : [];
+    const words = found.slice(0, WORDS_MAX);
+    wordsGroup.replaceChildren(...words.map(wordRow));
+    wordsSection.hidden = words.length === 0;
+    wordsFooter.hidden = found.length <= WORDS_MAX;
     const rows = [];
     for (const entry of entries) {
       const m = match(entry, tokens);
       if (m) rows.push(rowFor(entry, m.hint));
     }
     group.replaceChildren(...rows);
+    if (tokens.length && words.length) listSection.prepend(listsHeader);
+    else listsHeader.remove();
     listSection.hidden = rows.length === 0;
-    noResults.hidden = rows.length > 0;
+    noResults.hidden = rows.length > 0 || words.length > 0;
     if (!rows.length) noResultsText.textContent = `Nothing matches “${query.trim()}”.`;
     countEl.textContent = tokens.length ? `${rows.length} of ${plural(entries.length, 'list')}` : plural(entries.length, 'list');
   }

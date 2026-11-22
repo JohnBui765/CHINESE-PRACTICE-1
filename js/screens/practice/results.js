@@ -1,11 +1,12 @@
 // Results after a practice session: accuracy ring, stats, the entries missed, and a one-tap
 // "Practise mistakes" round.
 import { h } from '../../ui/dom.js';
-import { button, ring, section, row } from '../../ui/components.js';
+import { button, ring, section } from '../../ui/components.js';
 import { pop, replace } from '../../ui/router.js';
 import { speak } from '../../ui/speech.js';
 import * as store from '../../data/store.js';
 import { pinyinLabel } from '../../core/lists.js';
+import { showWord } from '../../ui/word.js';
 import { MODES } from './session.js';
 import { sayButton } from './recall.js';
 
@@ -41,7 +42,8 @@ export default async function create(params) {
   const stat = (value, label, color) =>
     h('div', { class: 'res-stat' }, h('div', { class: 'res-stat-value tabular', style: { color } }, String(value)), h('div', { class: 'res-stat-label' }, label));
 
-  // The entries missed, with their pinyin and meaning.
+  // The entries missed, with their pinyin and meaning. A tap opens the word page (how to write it);
+  // the speaker sits beside the row's button, not inside it.
   const missedRows = [];
   const listCache = new Map();
   for (const m of summary.missed || []) {
@@ -50,12 +52,21 @@ export default async function create(params) {
     const entry = list?.entries.find((e) => e.id === m.itemId);
     if (!entry) continue;
     missedRows.push(
-      row({
-        title: h('span', { class: 'ent-head' }, h('span', { class: 'ent-zh kai', lang: 'zh' }, entry.word), pinyinLabel(entry) ? h('span', { class: 'ent-py', lang: 'zh-Latn' }, pinyinLabel(entry)) : null),
-        subtitle: entry.meaning || null,
-        accessory: sayButton(entry.word, say),
-        className: 'ent',
-      }),
+      h(
+        'div',
+        { class: 'row ent res-word' },
+        h(
+          'button',
+          { type: 'button', class: 'res-open', 'aria-label': `${entry.word}: how to write it`, onClick: () => showWord(entry, { entries: list.entries }) },
+          h(
+            'span',
+            { class: 'row-main' },
+            h('span', { class: 'row-title', style: { display: 'block' } }, h('span', { class: 'ent-head' }, h('span', { class: 'ent-zh kai', lang: 'zh' }, entry.word), pinyinLabel(entry) ? h('span', { class: 'ent-py', lang: 'zh-Latn' }, pinyinLabel(entry)) : null)),
+            entry.meaning ? h('span', { class: 'row-subtitle', style: { display: 'block' } }, entry.meaning) : null,
+          ),
+        ),
+        sayButton(entry.word, say),
+      ),
     );
   }
 

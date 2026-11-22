@@ -247,28 +247,6 @@
   font-weight: 600;
 }
 .ld-scope .segmented { width: 100%; }
-.es-actions {
-  display: flex;
-  justify-content: center;
-  margin: 10px 0 4px;
-}
-
-/* The entry sheet: the word large, then its details. */
-.es-word {
-  font-size: 88px;
-  line-height: 1.1;
-  text-align: center;
-  letter-spacing: 0.04em;
-  overflow-wrap: anywhere;
-}
-.es-print {
-  margin-top: 4px;
-  font-size: 22px;
-  color: var(--label-2);
-  text-align: center;
-  letter-spacing: 0.08em;
-}
-.es-body { padding: 4px 4px 12px; }
 
 /* ---------- import screen ---------- */
 
@@ -307,7 +285,7 @@
 }
 .imp-preview { margin-top: 16px; }
 
-/* ---------- stroke order: boxes, diagram, the Strokes sheet ---------- */
+/* ---------- stroke order: boxes, diagram, model ---------- */
 
 .sk-box {
   position: relative;
@@ -323,35 +301,6 @@
   touch-action: none; /* drawing must not scroll the page */
 }
 .sk-target svg { display: block; }
-.sk-sheet {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 2px 0 16px;
-}
-.sk-picker {
-  width: 100%;
-  max-width: 320px;
-  margin-bottom: 12px;
-  font-size: 20px;
-}
-.sk-title {
-  margin-top: 10px;
-  font-size: 15px;
-  color: var(--label-2);
-  text-align: center;
-}
-.sk-controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  justify-content: center;
-  margin-top: 12px;
-}
-.sk-diagram-host {
-  width: 100%;
-  margin-top: 16px;
-}
 .sk-diagram {
   display: flex;
   flex-wrap: wrap;
@@ -566,3 +515,256 @@ html.kb-open .practice-stage {
   font-size: 16px;
   color: var(--label-2);
 }
+
+/* ---------- the word page (ui/word.js): how to write it, then the details ---------- */
+
+/* As tall as a sheet gets, so it never jumps when "Write it" (or another step) changes the
+   content. */
+.sheet.wd-sheet { height: calc(100% - var(--safe-top) - 24px); }
+.wd-boxes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  padding-top: 4px;
+}
+.wd-box {
+  border-radius: 8px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+/* No drawing on the word page: a swipe that starts on a box scrolls the sheet. */
+.wd-box .sk-target { touch-action: manipulation; }
+.wd-box:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.wd-selected .sk-grid rect {
+  stroke: var(--accent);
+  stroke-width: 2.5;
+}
+.wd-nodata {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px dashed var(--label-3);
+  border-radius: 6px;
+  color: var(--label-3);
+  line-height: 1;
+  cursor: default;
+}
+.wd-print {
+  margin-top: 6px;
+  font-size: 20px;
+  letter-spacing: 0.08em;
+  color: var(--label-2);
+  text-align: center;
+}
+.wd-char { margin-top: 12px; }
+.wd-char-title {
+  font-size: 15px;
+  color: var(--label-2);
+  text-align: center;
+}
+.wd-char-title .kai {
+  font-size: 24px;
+  color: var(--label);
+}
+.wd-diagram { margin-top: 8px; }
+.wd-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 12px;
+}
+.wd-write { margin-top: 14px; }
+.wd .sk-note { margin: 10px 0 0; }
+.wd-note {
+  margin: 12px 0 0;
+  font-size: 15px;
+  color: var(--label-2);
+  text-align: center;
+}
+.wd .rc-row { margin-top: 16px; }
+
+/* ---------- Write it (ui/drill.js): trace, from memory, copy, the whole word ---------- */
+
+.dr {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+.dr-top {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+.dr-back {
+  flex: none;
+  margin-left: -10px;
+}
+.dr-rounds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.dr-round {
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: var(--fill);
+  color: var(--label-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+.dr-round.now {
+  background: var(--accent-tint);
+  color: var(--accent-on-tint);
+}
+.dr-round.done { color: var(--green-text); }
+.dr-cue {
+  min-height: 76px;
+  margin-top: 12px;
+}
+.dr-title {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.dr-title .kai {
+  font-size: 28px;
+  font-weight: 400;
+}
+.dr-sub {
+  margin-top: 4px;
+  font-size: 15px;
+  color: var(--label-2);
+}
+.dr-pinyin {
+  margin-top: 4px;
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.dr-syl {
+  color: var(--accent);
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 5px;
+}
+.dr-meaning {
+  margin-top: 2px;
+  font-size: 17px;
+}
+.dr-stage {
+  width: 100%;
+  margin-top: 14px;
+}
+.dr-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 12px;
+}
+.dr-row.with-model { align-items: center; }
+.dr-word {
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.dr-model {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.dr-model-label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--label-3);
+}
+.dr-active .sk-grid rect { stroke: var(--accent); }
+.dr-status {
+  min-height: 22px;
+  margin-top: 12px;
+  font-size: 15px;
+  color: var(--label-2);
+}
+.dr-status[data-tone='wrong'] { color: var(--red-text); }
+.dr-status[data-tone='right'] { color: var(--green-text); }
+.dr-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 12px;
+}
+.dr-done-word {
+  margin-top: 4px;
+  font-size: 56px;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+.dr-results {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(100%, 340px);
+  margin: 0 auto;
+  padding: 0;
+  list-style: none;
+}
+.dr-result {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: var(--card);
+  text-align: left;
+}
+.dr-result svg { flex: none; }
+.dr-result-text {
+  font-size: 16px;
+  font-weight: 600;
+}
+.dr-result.right .dr-result-text { color: var(--green-text); }
+.dr-result.close .dr-result-text { color: var(--orange-text); }
+.dr-result.wrong .dr-result-text { color: var(--red-text); }
+
+/* ---------- finding a word: the list page's search box, the Lists tab's word results ---------- */
+
+.ld-search { margin: 0 0 10px; }
+.ld-noresults { padding-top: 24px; }
+.lists-word-in {
+  display: block;
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--label-3);
+}
+
+/* A missed word on the results screen: the row opens its word page, the speaker sits beside it. */
+.res-word { padding-top: 0; padding-bottom: 0; }
+.res-open {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  margin-left: -16px;
+  padding: 10px 0 10px 16px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.res-open:active { background: var(--fill); }

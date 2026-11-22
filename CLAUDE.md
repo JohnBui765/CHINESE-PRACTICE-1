@@ -49,12 +49,13 @@ app can be copied to the other:
 - From **Hanzi Grid**: `js/core/extract.js` (the lesson and reply reader), `js/core/pinyin.js`,
   `js/core/listedit.js`, `data/common3500.txt`, `data/font-chars.txt`, `fonts/` (the two subset
   fonts, licences), `prompts/`, their tests and fixtures. Unchanged.
-- New here: `js/core/{lists,strokes,pinyincheck,choose}.js`, `js/data/{chars,sample,strokes}.js`,
-  `js/ui/{files,strokes}.js`, `js/ui/speech.js` (Vocab Studio's, pointed at Chinese voices),
+- New here: `js/core/{lists,strokes,pinyincheck,choose,drill}.js`, `js/data/{chars,sample,strokes}.js`,
+  `js/ui/{files,strokes,word,drill}.js`, `js/ui/speech.js` (Vocab Studio's, pointed at Chinese voices),
   `js/screens/{import,list-detail}.js`, `js/screens/practice/{recall,write,pinyin,choose}.js`,
   `css/screens/hanzi.css`, `tools/{update-sw,make-icons,make-strokes}.mjs`, `icons/`,
-  `data/strokes/`, the tests in `tests/unit/{lists,session,strokes,pinyincheck,choose,speech}.test.js`
-  and `tests/e2e/flows.mjs`.
+  `data/strokes/`, the tests in
+  `tests/unit/{lists,session,strokes,pinyincheck,choose,speech,search,drill}.test.js` and
+  `tests/e2e/flows.mjs`.
 
 ## Pronunciation
 
@@ -66,9 +67,10 @@ app can be copied to the other:
   mainland Mandarin > Taiwan > Cantonese. `bestVoice(voices, savedURI)` upgrades a saved basic
   voice to its downloaded copy. The app always speaks **characters**, never pinyin.
 - Speakers: the front of a recall card only when the characters are the question (hearing the
-  word gives away the pinyin), the back of every recall card, example sentences, the entry
-  sheet, the Strokes sheet, the pick-the-characters prompt, after a typed-pinyin answer, the
-  results rows. `autoSpeak` says the word when an answer is revealed (recall, pinyin, write).
+  word gives away the pinyin), the back of every recall card, example sentences, the word page
+  (Hear it), the pick-the-characters prompt, after a typed-pinyin answer, the results rows.
+  `autoSpeak` says the word when an answer is revealed (recall, pinyin, write) and when the
+  last write of "Write it" is done (inside that touch, so iOS allows it).
 - Settings: Voice (sheet: Automatic, best quality, standard, a raw list of every voice with
   Copy, and how to download a voice), Speed (0.5–1.2, default 0.9), "Say the word with the
   answer", Test voice (你好！我想喝水。).
@@ -116,19 +118,54 @@ app can be copied to the other:
   `node tools/make-strokes.mjs` (the source is cached in `tools/cache/`, not in git).
 - **Loading:** `js/data/strokes.js` fetches one block file at a time, once, from the service
   worker's cache; `strokeChars()` gives the Set of characters with data.
-- **Strokes sheet** (`showStrokes(word)` in `js/ui/strokes.js`): a picker of the word's
-  characters, a 田字格 with the character animating (outline shown), Play again, One stroke at a
-  time, Slower, the numbered diagram (cell i = strokes 0..i, the newest red with its number at
-  the start of its median), and the note that the order is the mainland standard. Opened from
-  the entry sheet on the list page and from the pencil on the back of a recall card.
+- **Word page** (`showWord(entry, { entries, progress, drill })` in `js/ui/word.js`, a sheet as
+  tall as sheets get): how to write the word comes first. Every character in its own 田字格
+  (`rowBoxSize`: one character 240 px, at most 4 a row, wrapping), drawn one after the other
+  over its outline as soon as the page opens; a tap on a box draws that character again and
+  shows its numbered diagram (cell i = strokes 0..i, the newest red with its number at the
+  start of its median; the first character's at first). Play again (the whole word), One stroke
+  (of the chosen character), Slower, Hear it, then **Write it** (words of 1–4 characters that
+  all have data), the note that the order is the mainland standard, and what the old entry
+  sheet showed: pinyin, meaning, the AI's "not sure" flag, character warnings, the example
+  sentence, the characters under the word, the progress line (`statusOf`, `warningOf`). A
+  character without data shows in KaiTi in a dashed box. Opened from the list page's rows, the
+  Lists search, the pencil on the back of a recall card, the missed words on the results screen
+  and "Learn it" in the writing mode (`drill: true` opens straight into Write it). A second tap
+  does nothing while a word page is loading; once up, the sheet covers the page. A swipe that
+  starts on a box scrolls the sheet (`touch-action: manipulation` there; drawing boxes keep
+  `none`). Back from Write it, the word is drawn again.
+- **Writers are pooled** (`borrowWriter(box, char, data, { size, outline, speed, delay })` in
+  `js/ui/strokes.js` → `{ writer, release() }`): Hanzi Writer 3.7.3 adds a `mouseup` and a
+  `touchend` listener to `document` for every writer and never removes them, so a writer is
+  never freed (about 30 KB, measured). A released writer is reused with `setCharacter()` (no new
+  listeners), recoloured when the theme changed, its outline shown or hidden; one pool per box
+  size and speed. The word page releases its writers when the sheet has closed, Write it at
+  every step, the writing mode 450 ms after its card has slid out (it must not go blank while
+  still visible). Never create a writer with `makeWriter` where `borrowWriter` can be used.
+- **Write it** (`js/core/drill.js` = the order, pure; `js/ui/drill.js` = the view, in the same
+  sheet, with "‹ The word" to go back): round 1 traces every character over its outline (hint
+  after 1 miss; "I know it" skips the tracing), round 2 writes each character from memory
+  (only the pinyin with that character's syllable marked, the meaning and "1st character of 2"
+  with the meaning of its "> " line; hint after `writeHintAfter` misses; "Show the stroke" flashes
+  the next stroke). A from-memory write with a wrong stroke or any help adds a **Copy** step
+  (an empty box with a still model beside it, hint after 2 misses) and another from-memory try,
+  at most 3 tries; then the drill moves on. Round 3 (2+ characters) writes the whole word from
+  memory, at most 2 tries. All the tracing comes before the recalling, so each recall comes
+  after a short gap. The end screen lists each character (first try green, after more tries
+  orange, still wrong red) and the whole word, with **Again from memory** (no tracing) and
+  "The word". Strictness (`writeLeniency`) applies; nothing is saved (no progress, no history).
+  "I know it" and "Show the stroke" ignore taps for 400 ms after a step starts (the second tap
+  of a double tap on Write it, I know it or Again from memory lands where they are). Hints draw
+  the stroke at `strokeHighlightSpeed` 0.6 (the default flashes it in half a second).
 - **Writing mode** (`write`): cards for entries in scope whose word has 1–4 Chinese characters
   all with data (`writableChars`; a card remembers its `chars`). One 田字格 per character; the
   quiz runs on one character at a time (`leniency`, `showHintAfterMisses` from the settings,
   backwards strokes refused). Grading: no mistakes and no outline → right; mistakes, the
   outline or a hint → correct but `hinted` (keeps the box); three automatic hints, or "Can't
-  remember" (the strokes are then animated) → wrong. The stroke data of a session's cards is
-  fetched once in `practice.js` and passed as `ctx.strokes`. `touch-action: none` on the box so
-  drawing never scrolls.
+  remember" (the strokes are then animated) → wrong. A card that was not perfect shows **Learn
+  it**, which opens the word page straight into Write it. The stroke data of a session's cards
+  is fetched once in `practice.js` and passed as `ctx.strokes`. `touch-action: none` on the box
+  so drawing never scrolls.
 
 ## Hosting and offline
 
@@ -195,7 +232,12 @@ restored after iOS evicts the app; modals from the bottom).
   warning, install hint, a paused session to Resume, the review card (cards due + new, Start
   review), streak / mastered / words tiles, recent lists, Add a list.
 - **Lists:** every list with its counts ("10 words · 9 characters"), a status badge (`n due` /
-  New), search over names, words, pinyin and meanings (accent-free).
+  New), and a search. A search shows the matching **words** first (`searchWords` in
+  `js/core/lists.js`: characters; pinyin with or without tones, tone numbers, spaces or
+  apostrophes, u: for ü and v after n or l; English, "to go" = "go"; exact, then at the start,
+  then inside (3 letters or more); one result per word and reading across lists, naming the
+  lists it is in; at most 30, with a note when there are more), a tap opens its word page; then
+  the lists whose names or words match (accent-free), as before.
 - **New list / Edit list** (modal, `js/screens/import.js`): Paste (clipboard) or Open file…
   (`.txt`; UTF-8, UTF-16 with BOM, GB18030), the text box, the name (taken from the `#` line or
   the file name until the owner edits it), notices from the reader (`# continue`, `# nothing to
@@ -204,13 +246,16 @@ restored after iOS evicts the app; modals from the bottom).
 - **List** (`list-detail.js`): New / Learning / Reviewing / Mastered for the current scope; the
   **Practise** control (Words · Characters · All, the `scope` setting); the two modes with their
   card counts; "Review what is due"; every entry as a row (KaiTi, print form, pinyin with arrow,
-  meaning, example in KaiTi with pinyin and English, progress, warnings), parts indented; a tap
-  opens the entry sheet. **…** menu: Edit list, Save as .txt file (`toLessonText`, Share sheet or
-  download), Delete list.
+  meaning, example in KaiTi with pinyin and English, progress, warnings), parts indented, with a
+  search box above them that keeps the entries that match (`matchEntry`, lesson order; the box
+  is made once, so the keyboard stays up when the page refreshes); a tap opens the word page.
+  **…** menu: Edit list, Save as .txt file (`toLessonText`, Share sheet or download), Delete
+  list.
 - **Practice** (modal): header (close, progress, counter), the card, footer **Show answer → Didn't
   know / Knew it → Continue**; wrong cards are re-queued at the end (at most 2 extra tries);
   the session is saved as soon as the last card is graded; the snapshot lets a session resume.
-- **Results:** accuracy ring, Knew / Missed / Time, the missed entries, Practise mistakes.
+- **Results:** accuracy ring, Knew / Missed / Time, the missed entries (a tap opens the word page;
+  the speaker sits beside the row's button), Practise mistakes.
 - **Settings:** what to practise, cards per review, continue after grading, show the print
   form, theme, backup export/restore, storage, help sheets.
 
@@ -239,9 +284,9 @@ restored after iOS evicts the app; modals from the bottom).
 index.html, manifest.webmanifest, sw.js
 css/app.css, css/screens/*.css           design system; hanzi.css = fonts + Chinese pieces
 js/app.js                                boot: database, settings, theme, router, service worker
-js/core/   extract.js pinyin.js listedit.js (Hanzi Grid) · util.js srs.js text.js (Vocab Studio) · lists.js strokes.js pinyincheck.js choose.js (new)
+js/core/   extract.js pinyin.js listedit.js (Hanzi Grid) · util.js srs.js text.js (Vocab Studio) · lists.js strokes.js pinyincheck.js choose.js drill.js (new)
 js/data/   db.js store.js chars.js sample.js strokes.js
-js/ui/     dom.js components.js icons.js router.js viewport.js clipboard.js files.js strokes.js speech.js
+js/ui/     dom.js components.js icons.js router.js viewport.js clipboard.js files.js strokes.js word.js drill.js speech.js
 js/screens/ today.js lists.js import.js list-detail.js settings.js index.js
 js/screens/practice/ session.js practice.js recall.js write.js pinyin.js choose.js results.js
 vendor/ hanzi-writer.esm.js (+ licence, VERSIONS.txt)
@@ -252,25 +297,32 @@ tools/ serve.mjs update-sw.mjs make-icons.mjs make-strokes.mjs (cache in tools/c
 
 Browser test (`tests/e2e/flows.mjs`): serves the app at `http://localhost:8123/CHINESE-PRACTICE-1/`
 (the GitHub Pages path), Chromium at iPhone size: onboarding → sample list → a full recall
-session → results → Today stats → paste Bài 7 → the Strokes sheet (牛 has 4 diagram cells) →
-pick the characters (the tile matching the pinyin shown) → type the pinyin (one card with the
-tone bar, one typed with marks) → a writing card drawn stroke by stroke along the data's
-medians with the mouse (reads the writer's SVG transform, so it tests the real quiz) → the
-Settings pronunciation section and voice sheet (no voices in headless Chromium) → manifest id →
+session → results → Today stats → paste Bài 7 → the word page (two boxes; 牛 has 4 diagram
+cells, a tap on 奶 shows 5) → the list page's search (chao: 超市, 超) → Write it on 超市 (both
+traced, 超 from memory with its first stroke drawn backwards once, so Copy comes, then 市 and the
+whole word; the end screen) → pick the characters (the tile matching the pinyin shown) → type
+the pinyin (one card with the tone bar, one typed with marks) → a writing card → the Settings
+pronunciation section and voice sheet (no voices in headless Chromium) → the Lists search
+(chao: 超, 超市; a tap opens the word page) → manifest id →
 service worker cache prefix → other apps' caches untouched → offline reload with the KaiTi font.
-Screenshots in `tests/output/`.
+Strokes are drawn with the mouse along the data's medians (`drawChar`: it reads the writer's SVG
+transform, so the real Hanzi Writer quiz checks them). Screenshots in `tests/output/`.
 
 ## Milestones
 
 1. **Shell and recall cards** — done: lists from Hanzi Grid files or paste, two recall modes,
    spaced repetition, Today, backup, offline, tests.
-2. **Strokes** — done: the Strokes sheet and the writing mode (see "Stroke order"), Hanzi
-   Writer vendored, the data pipeline, settings for hints, strictness and tracing. Not built:
-   a draw-and-grade-yourself fallback for characters without data (the writing mode simply
-   skips such words; all 3,500 common characters have data).
+2. **Strokes** — done: the Strokes sheet (part of the word page since 3b) and the writing mode
+   (see "Stroke order"), Hanzi Writer vendored, the data pipeline, settings for hints,
+   strictness and tracing. Not built: a draw-and-grade-yourself fallback for characters without
+   data (the writing mode simply skips such words; all 3,500 common characters have data).
 3. **Typed pinyin, pick the characters, pronunciation** — done (see "Typed pinyin and picking
    characters" and "Pronunciation"). Not verified: how the voices sound on the owner's iPhone;
    headless Chromium has no voices, so the browser test only checks that the screens work.
+3b. **Find a word and write it** — done (asked for before 4): the word search (Lists tab and list
+   page), the word page with the stroke order first, and Write it (see "Stroke order"). Not
+   built: a review schedule for writing (the owner's choice for now). Not verified: drawing
+   with a finger on the owner's iPhone (the browser test draws with the mouse).
 4. **Sentences:** fill the blank in an example sentence from a word bank, put a sentence's chunks
    in order, dictation (hear the sentence, write the characters or the pinyin).
 5. **Polish:** the AI prompt flow (Copy prompt / paste reply, filling in pinyin, meanings and

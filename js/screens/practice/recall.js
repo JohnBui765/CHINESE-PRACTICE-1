@@ -4,7 +4,7 @@
 // learner recalls (or writes on paper) the characters, and the back shows them.
 import { h, reducedMotion } from '../../ui/dom.js';
 import { iconButton } from '../../ui/components.js';
-import { showStrokes } from '../../ui/strokes.js';
+import { showWord } from '../../ui/word.js';
 import { partsOf, pinyinLabel, exampleUnderline } from '../../core/lists.js';
 
 const FLIP_MS = 450;
@@ -134,16 +134,16 @@ export function render(card, ctx) {
         h('span', { class: 'rc-back-word kai', lang: 'zh' }, item.word),
         settings.showPrint ? h('span', { class: 'rc-back-print print', lang: 'zh' }, item.word) : null,
       ),
-      // Hear the word, and its stroke order, without turning the card.
+      // Hear the word, and how to write it (the word page), without turning the card.
       sayButton(item.word, ctx.speak, { className: 'rc-say', variant: 'filled' }),
       iconButton({
         icon: 'pencil',
-        label: 'Stroke order',
+        label: 'How to write it',
         variant: 'filled',
         className: 'rc-strokes',
         onTap: (e) => {
           e.stopPropagation();
-          showStrokes(item.word);
+          showWord(item, { entries: list.entries });
         },
       }),
     ),

@@ -76,17 +76,40 @@ characters listed under them) or **All**. Then pick a mode:
   character with your finger in a 田字格, in the right order. A stroke in the wrong place, order
   or direction is refused; after three misses the right stroke lights up. No mistakes counts as
   known; a card that needed hints keeps its review date; **Can't remember** shows the strokes
-  and counts as missed. **Show outline** gives a faint shape to trace over. Works for words of
-  one to four characters.
+  and counts as missed (then **Learn it** opens **Write it** for that word, see below). **Show
+  outline** gives a faint shape to trace over. Works for words of one to four characters.
 
-**Stroke order** for any character: tap a word on a list page and then **Strokes**, or tap the
-pencil on the back of a card. The character is drawn stroke by stroke (**Play again**, **One
-stroke** at a time, **Slower**), with a numbered diagram under it. The order follows the mainland
-China standard; your textbook has the last word.
+### Look up how to write a word
+
+**Find it.** On the **Lists** tab, type in the search box: the characters (超市), the pinyin with or
+without tones (chaoshi, chāoshì, chao1shi4; v for ü) or the English (supermarket). The matching
+words come first, from all your lists, then the lists. A list page has its own search box above
+the words, handy for a list you keep adding to.
+
+**See it.** Tap a word: its page opens with every character in its own 田字格, drawn stroke by
+stroke, one after the other. Tap a box to draw that character again and see its numbered stroke
+diagram. **Play again** draws the whole word, **One stroke** goes one stroke per tap, **Slower**,
+**Hear it**. Under it: pinyin, meaning, the example sentence and the characters listed under the
+word. The same page opens from the pencil on the back of a card and from the words you missed on
+the results screen. The order follows the mainland China standard; your textbook has the last
+word.
+
+**Write it** (words of one to four characters) helps you remember it, in a minute or two:
+1. **Trace** every character over its grey outline (skip with **I know it**).
+2. Write each character **from memory**, seeing only the pinyin (its syllable marked) and the
+   meaning. **Show the stroke** lights up the next stroke if you are stuck.
+   A wrong stroke (or any help) means you **copy** it once, with a model beside the box, then
+   try from memory again (up to three tries).
+3. Write the **whole word** from memory.
+
+Tracing every character before recalling the first puts a short gap before each recall, which
+helps it stick. At the end you see which characters went right the first time; **Again from
+memory** repeats it without the tracing. Nothing is scored: it is practice.
 
 **Hear it.** Every speaker button says the characters with your iPhone's own Chinese voice,
-offline: on the cards, next to example sentences, on a word's page, in the Strokes sheet and on
-the results. When an answer is shown, the word is said by itself (turn that off in Settings). The
+offline: on the cards, next to example sentences, on a word's page and on the results. When an
+answer is shown, or a **Write it** is finished, the word is said by itself (turn that off in
+Settings). The
 built-in voice is Tingting; a much more natural one can be downloaded once in iPhone Settings ›
 Accessibility › Spoken Content › Voices › Chinese (for example Li-mu or Yu-shu, marked Enhanced
 or Premium), then chosen in Hanzi Drill › Settings › Voice. The app sends the characters, never
@@ -130,6 +153,9 @@ it is opened online. Tap Update. Nothing you saved is lost.
 - [ ] Turn on **Airplane Mode**, close and open the app: it still works, the lists are there.
 - [ ] **+** → **Open file…** → pick a `.txt` list from the Files app: the preview shows the words.
 - [ ] Practise a list in every mode, then check Today shows the review count.
+- [ ] Lists tab → search **chao** → tap 超市: both characters are drawn stroke by stroke. Tap
+      **Write it** and write with your finger; check the strokes are accepted and the word is said
+      at the end.
 - [ ] Settings → **Test voice**: you hear 你好！我想喝水。 Pick a downloaded voice under **Voice** if you
       have one.
 - [ ] Settings → **Export backup** → Save to Files.
