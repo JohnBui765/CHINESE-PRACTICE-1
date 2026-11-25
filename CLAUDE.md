@@ -49,12 +49,12 @@ app can be copied to the other:
 - From **Hanzi Grid**: `js/core/extract.js` (the lesson and reply reader), `js/core/pinyin.js`,
   `js/core/listedit.js`, `data/common3500.txt`, `data/font-chars.txt`, `fonts/` (the two subset
   fonts, licences), `prompts/`, their tests and fixtures. Unchanged.
-- New here: `js/core/{lists,strokes,pinyincheck,choose,drill}.js`, `js/data/{chars,sample,strokes}.js`,
+- New here: `js/core/{lists,strokes,pinyincheck,choose,drill,hsk}.js`, `js/data/{chars,sample,strokes,hsk}.js`,
   `js/ui/{files,strokes,word,drill}.js`, `js/ui/speech.js` (Vocab Studio's, pointed at Chinese voices),
   `js/screens/{import,list-detail}.js`, `js/screens/practice/{recall,write,pinyin,choose}.js`,
   `css/screens/hanzi.css`, `tools/{update-sw,make-icons,make-strokes}.mjs`, `icons/`,
-  `data/strokes/`, the tests in
-  `tests/unit/{lists,session,strokes,pinyincheck,choose,speech,search,drill}.test.js` and
+  `data/strokes/`, `data/hsk/`, the tests in
+  `tests/unit/{lists,session,strokes,pinyincheck,choose,speech,search,drill,hsk}.test.js` and
   `tests/e2e/flows.mjs`.
 
 ## Pronunciation
@@ -167,6 +167,46 @@ app can be copied to the other:
   is fetched once in `practice.js` and passed as `ctx.strokes`. `touch-action: none` on the box
   so drawing never scrolls.
 
+## HSK dictionary (data and rules)
+
+- **What:** the words of HSK 1–3 of the 2025 syllabus (CLEC, November 2025; the exams switch to
+  it during 2026): 978 words (294 + 197 + 487) in `data/hsk/hsk1.txt`, `hsk2.txt`, `hsk3.txt`,
+  each with its dictionary pinyin, a short meaning and **three example sentences**. A word whose
+  two readings a learner needs by HSK 3 (还 hái / huán and 9 more) has one entry per reading:
+  988 entries, 2,964 sentences. Look-up only:
+  HSK words are not practised and have no progress.
+- **Format:** the lesson format with three `= ` lines under each word and `# HSK n` on top;
+  " ?" ends a line the AI was not sure of. `readHsk(text, level)` in `js/core/hsk.js` (pure)
+  reads it (`readText()` keeps one sentence per word and drops a word's second reading, so the
+  dictionary does not use it). `hskDictionary()` in `js/data/hsk.js` loads the three files once:
+  `{ lists: [{ id: 'hsk1', name: 'HSK 1', entries }], byWord }`; an entry is
+  `{ id: 'hsk1-12', word, pinyin, meaning, depth: 0, hsk: 1, unsure, examples: [{ text, pinyin, meaning, unsure }] }`
+  with its first sentence also in `example`, `examplePinyin`, `exampleMeaning`.
+- **Source:** the words and levels from `complete-hsk-vocabulary` (MIT; notice in
+  `data/hsk/LICENSE-complete-hsk-vocabulary.txt`; its level marks t1–t3); the readings, meanings
+  and sentences written by AI (Claude, 2026-11-25) following `prompts/examples.txt` and
+  `prompts/pinyin-meaning.txt`, three sentences per word; no CC-CEDICT text.
+  `data/hsk/README.txt` says all this. Not yet checked by a person.
+- **Rules** (`tests/unit/hsk.test.js` checks the files): three sentences per word, each with the
+  word unchanged, at most 12 boxes, Chinese punctuation, ending in 。？！ (its pinyin in . ? !),
+  one pinyin syllable per character with tone marks (an r-ending counts as the syllable ér of its
+  儿, anywhere in the sentence: `sentenceSyllables` in the test; `splitPinyin` alone only knows
+  a 儿 at the end), only the 3,500 common characters, no
+  sentence twice; every character of the words has stroke data. While the files were written, a
+  stricter checker (kept out of the repo) also compared each syllable's tone with the dictionary
+  readings of its character, applied the prompts' tone changes, and flagged characters above the
+  word's level.
+- **Screens:** the Lists search shows, after the owner's words and lists, a section **HSK 1–3**:
+  the dictionary's words (`searchWords` over the three level lists) without the ones already
+  found among the owner's words; an owner's word that is also an HSK word says so in its row
+  ("Bài 7 · HSK 1"). The word page of an HSK word shows its three sentences ("Examples · HSK 2",
+  a speaker on each) and no progress; the page of an owner's word adds "More examples · HSK n"
+  (`hskMatches`: the same word and reading, the same tones first, else the same letters; the
+  list's own sentence is not repeated). Write it works for HSK words as for any word.
+- **Size and speed:** 291 KB, precached. The search is fast enough for about 1,000 words;
+  HSK 4–6 (about 5,000 more) would need each entry's folded pinyin and meaning prepared once
+  (measured over 12,600 entries: 120–150 ms per key today, 2–3 ms prepared).
+
 ## Hosting and offline
 
 - Public repo `johnbui765/CHINESE-PRACTICE-1`, GitHub Pages from the `main` branch root:
@@ -189,8 +229,8 @@ app can be copied to the other:
     `installHintDismissed`). Never call `localStorage.clear()` or touch other keys.
   - Ask once for persistent storage; ignore the answer.
 - Precached: `index.html`, `manifest.webmanifest`, `css/`, `js/`, `icons/`, `fonts/*.ttf`,
-  `data/*.txt`, `prompts/*.txt`, `vendor/` (without licence and readme files). Not `tests/`,
-  `tools/`, `docs/`.
+  `data/` (`*.txt`, `strokes/`, `hsk/`), `prompts/*.txt`, `vendor/` (without licence and readme
+  files). Not `tests/`, `tools/`, `docs/`.
 
 ## Fonts
 
@@ -237,7 +277,8 @@ restored after iOS evicts the app; modals from the bottom).
   apostrophes, u: for ü and v after n or l; English, "to go" = "go"; exact, then at the start,
   then inside (3 letters or more); one result per word and reading across lists, naming the
   lists it is in; at most 30, with a note when there are more), a tap opens its word page; then
-  the lists whose names or words match (accent-free), as before.
+  the lists whose names or words match (accent-free), as before; then the section **HSK 1–3**
+  (see "HSK dictionary"). The search shows even when there are no lists.
 - **New list / Edit list** (modal, `js/screens/import.js`): Paste (clipboard) or Open file…
   (`.txt`; UTF-8, UTF-16 with BOM, GB18030), the text box, the name (taken from the `#` line or
   the file name until the owner edits it), notices from the reader (`# continue`, `# nothing to
@@ -284,13 +325,13 @@ restored after iOS evicts the app; modals from the bottom).
 index.html, manifest.webmanifest, sw.js
 css/app.css, css/screens/*.css           design system; hanzi.css = fonts + Chinese pieces
 js/app.js                                boot: database, settings, theme, router, service worker
-js/core/   extract.js pinyin.js listedit.js (Hanzi Grid) · util.js srs.js text.js (Vocab Studio) · lists.js strokes.js pinyincheck.js choose.js drill.js (new)
-js/data/   db.js store.js chars.js sample.js strokes.js
+js/core/   extract.js pinyin.js listedit.js (Hanzi Grid) · util.js srs.js text.js (Vocab Studio) · lists.js strokes.js pinyincheck.js choose.js drill.js hsk.js (new)
+js/data/   db.js store.js chars.js sample.js strokes.js hsk.js
 js/ui/     dom.js components.js icons.js router.js viewport.js clipboard.js files.js strokes.js word.js drill.js speech.js
 js/screens/ today.js lists.js import.js list-detail.js settings.js index.js
 js/screens/practice/ session.js practice.js recall.js write.js pinyin.js choose.js results.js
 vendor/ hanzi-writer.esm.js (+ licence, VERSIONS.txt)
-fonts/ data/ (common3500, font-chars, strokes/, stroke-chars) prompts/ icons/
+fonts/ data/ (common3500, font-chars, strokes/, stroke-chars, hsk/) prompts/ icons/
 tests/unit/*.test.js (npm test) · tests/e2e/flows.mjs (npm run e2e) · tests/fixtures/
 tools/ serve.mjs update-sw.mjs make-icons.mjs make-strokes.mjs (cache in tools/cache/, not in git)
 ```
@@ -303,7 +344,8 @@ traced, 超 from memory with its first stroke drawn backwards once, so Copy come
 whole word; the end screen) → pick the characters (the tile matching the pinyin shown) → type
 the pinyin (one card with the tone bar, one typed with marks) → a writing card → the Settings
 pronunciation section and voice sheet (no voices in headless Chromium) → the Lists search
-(chao: 超, 超市; a tap opens the word page) → manifest id →
+(chao: 超, 超市; the 超市 row says HSK 1 and its page has More examples · HSK 1) → the HSK section
+(shui: 水 and 睡觉; 水's page has three sentences with speakers and no progress) → manifest id →
 service worker cache prefix → other apps' caches untouched → offline reload with the KaiTi font.
 Strokes are drawn with the mouse along the data's medians (`drawChar`: it reads the writer's SVG
 transform, so the real Hanzi Writer quiz checks them). Screenshots in `tests/output/`.
@@ -323,6 +365,9 @@ transform, so the real Hanzi Writer quiz checks them). Screenshots in `tests/out
    page), the word page with the stroke order first, and Write it (see "Stroke order"). Not
    built: a review schedule for writing (the owner's choice for now). Not verified: drawing
    with a finger on the owner's iPhone (the browser test draws with the mouse).
+3c. **HSK 1–3 dictionary** — done (asked for before 4; see "HSK dictionary"). Not built: HSK 4–6
+   (with the faster search), practising HSK words. Not verified: the AI-written sentences by a
+   person.
 4. **Sentences:** fill the blank in an example sentence from a word bank, put a sentence's chunks
    in order, dictation (hear the sentence, write the characters or the pinyin).
 5. **Polish:** the AI prompt flow (Copy prompt / paste reply, filling in pinyin, meanings and

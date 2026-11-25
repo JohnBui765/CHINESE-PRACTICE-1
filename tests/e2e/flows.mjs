@@ -276,9 +276,33 @@ try {
   await page.locator('.lists-search-input').fill('chao');
   await page.locator('.lists-words .ent').first().waitFor();
   assert.deepEqual(await page.locator('.lists-words .ent-zh').allTextContents(), ['超', '超市']);
+  // 超市 is also an HSK 1 word: its row says so, and the HSK section does not show it again.
+  assert.match(await page.locator('.lists-words .lists-word-in').nth(1).textContent(), /HSK 1$/);
+  assert.equal(await page.locator('.lists-hsk').isHidden(), true, 'no other HSK 1-3 word reads chao');
   await page.screenshot({ path: shot('16-lists-search.png') });
   await page.locator('.lists-words .ent').nth(1).click();
   await page.locator('.wd-sheet .wd-box[data-char="市"]').waitFor();
+  // Its page: the list's own sentence, then the HSK sentences (without the list's one).
+  assert.equal(await page.locator('.wd-sheet .wd-hsk .rc-block-label').textContent(), 'More examples · HSK 1');
+  assert.ok((await page.locator('.wd-sheet .wd-hsk .wd-ex').count()) >= 2);
+  await page.getByRole('button', { name: 'Close' }).last().click();
+  await page.waitForTimeout(500);
+
+  // 4j. Words of the HSK 1-3 dictionary that are in no list (水 and 睡觉 read shui); the page of
+  // 水 has its three sentences, each with a speaker, and no progress.
+  await page.locator('.lists-search-input').fill('shui');
+  await page.locator('.lists-hsk .ent').first().waitFor();
+  const hskWords = await page.locator('.lists-hsk .ent-zh').allTextContents();
+  assert.ok(hskWords.includes('水') && hskWords.includes('睡觉'), hskWords.join(' '));
+  assert.equal(await page.locator('.lists-words').isHidden(), true, 'no list has a word read shui');
+  await page.locator('.lists-hsk .ent').filter({ has: page.locator('.ent-zh', { hasText: /^水$/ }) }).click();
+  await page.locator('.wd-sheet .wd-hsk .wd-ex').nth(2).waitFor();
+  assert.equal(await page.locator('.wd-sheet .wd-hsk .wd-ex').count(), 3);
+  assert.equal(await page.locator('.wd-sheet .wd-hsk .rc-example-say').count(), 3);
+  assert.equal(await page.locator('.wd-sheet .ent-status').count(), 0, 'an HSK word has no progress');
+  await page.waitForTimeout(500); // the sheet has slid in
+  await page.locator('.wd-sheet .wd-hsk').scrollIntoViewIfNeeded();
+  await page.screenshot({ path: shot('17-hsk-word.png') });
   await page.getByRole('button', { name: 'Close' }).last().click();
   await page.waitForTimeout(500);
   await page.locator('.lists-clear').click();

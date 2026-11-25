@@ -1,6 +1,7 @@
 // Lists tab: every saved list (most recently updated first) with a search field. A search shows
 // the matching words first (from every list: by characters, pinyin with or without tones, or
-// English; tap one for how to write it), then the lists whose names or words match.
+// English; tap one for how to write it), then the lists whose names or words match, then the
+// words of the built-in HSK 1-3 dictionary that are not in a list.
 import { h } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { screen, section, row, badge, emptyState } from '../ui/components.js';
@@ -9,7 +10,9 @@ import { showWord } from '../ui/word.js';
 import * as store from '../data/store.js';
 import { isDue } from '../core/srs.js';
 import { debounce, plural } from '../core/util.js';
-import { countLabel, fold, searchWords, pinyinLabel } from '../core/lists.js';
+import { countLabel, fold, searchWords, pinyinLabel, pinyinLetters } from '../core/lists.js';
+import { hskMatches } from '../core/hsk.js';
+import { hskDictionary } from '../data/hsk.js';
 
 const SEARCH_DELAY = 200;
 const HINT_MAX = 28;
@@ -62,6 +65,7 @@ function match(entry, tokens) {
 
 export default async function create() {
   let entries = [];
+  let hsk = { lists: [], byWord: new Map() }; // the HSK 1-3 dictionary (data/hsk.js)
   let query = '';
   let visible = true;
   let dirty = false;
@@ -120,6 +124,12 @@ export default async function create() {
   wordsSection.appendChild(wordsFooter);
   wordsSection.hidden = true;
 
+  const hskSection = section({ header: 'HSK 1–3', className: 'lists-hsk', children: [] });
+  const hskGroup = hskSection.querySelector('.group');
+  const hskFooter = h('div', { class: 'section-footer' }, `The first ${WORDS_MAX} words. Type more to narrow them down.`);
+  hskSection.appendChild(hskFooter);
+  hskSection.hidden = true;
+
   const listSection = section({ className: 'lists-section', children: [] });
   const group = listSection.querySelector('.group');
   const listsHeader = h('div', { class: 'section-header' }, 'Lists');
@@ -140,7 +150,7 @@ export default async function create() {
     tab: 'lists',
     className: 'lists-screen',
     actions: [{ icon: 'plus', ariaLabel: 'New list', onTap: openImport }],
-    body: [searchEl, wordsSection, listSection, noResults, empty],
+    body: [searchEl, wordsSection, listSection, hskSection, noResults, empty],
   });
 
   function rowFor(entry, hint) {
@@ -164,6 +174,9 @@ export default async function create() {
     return el;
   }
 
+  // "HSK 1" after the lists of one of the owner's words that is also in the dictionary.
+  const hskLevels = (found) => (found.entry.hsk ? [] : [...new Set(hskMatches(found.entry, hsk.byWord).map((e) => `HSK ${e.hsk}`))]);
+
   // A word found by the search: its characters, pinyin and meaning, and the lists it is in.
   function wordRow(found) {
     const py = pinyinLabel(found.entry);
@@ -173,49 +186,52 @@ export default async function create() {
         'span',
         null,
         found.entry.meaning ? h('span', { class: 'ent-mean' }, found.entry.meaning) : null,
-        h('span', { class: 'lists-word-in' }, found.lists.map((l) => l.name || 'Untitled list').join(' · ')),
+        h('span', { class: 'lists-word-in' }, [...found.lists.map((l) => l.name || 'Untitled list'), ...hskLevels(found)].join(' · ')),
       ),
       className: 'ent lists-word',
       onTap: () => showWord(found.entry, { entries: found.list.entries }),
     });
   }
 
+  // The key under which searchWords() makes one result of a word and its reading.
+  const keyOf = (found) => `${found.word}|${pinyinLetters(found.entry.pinyin)}`;
+
   function render() {
     const hasLists = entries.length > 0;
-    empty.hidden = hasLists;
-    searchEl.hidden = !hasLists;
-    if (!hasLists) {
-      listSection.hidden = true;
-      wordsSection.hidden = true;
-      noResults.hidden = true;
-      group.replaceChildren();
-      wordsGroup.replaceChildren();
-      return;
-    }
     const tokens = fold(query).split(' ').filter(Boolean);
+    empty.hidden = hasLists || tokens.length > 0;
+    searchEl.hidden = !hasLists && !hsk.lists.length;
     // One more than shown, to know whether there are more.
     const found = tokens.length ? searchWords(entries.map((e) => e.list), query, { limit: WORDS_MAX + 1 }) : [];
     const words = found.slice(0, WORDS_MAX);
     wordsGroup.replaceChildren(...words.map(wordRow));
     wordsSection.hidden = words.length === 0;
     wordsFooter.hidden = found.length <= WORDS_MAX;
+    // The dictionary's words, without the ones already found in the lists.
+    const mine = new Set(found.map(keyOf));
+    const hskFound = tokens.length ? searchWords(hsk.lists, query, { limit: WORDS_MAX + 1 + mine.size }).filter((f) => !mine.has(keyOf(f))) : [];
+    const hskWords = hskFound.slice(0, WORDS_MAX);
+    hskGroup.replaceChildren(...hskWords.map(wordRow));
+    hskSection.hidden = hskWords.length === 0;
+    hskFooter.hidden = hskFound.length <= WORDS_MAX;
     const rows = [];
     for (const entry of entries) {
       const m = match(entry, tokens);
       if (m) rows.push(rowFor(entry, m.hint));
     }
     group.replaceChildren(...rows);
-    if (tokens.length && words.length) listSection.prepend(listsHeader);
+    if (tokens.length && (words.length || hskWords.length)) listSection.prepend(listsHeader);
     else listsHeader.remove();
     listSection.hidden = rows.length === 0;
-    noResults.hidden = rows.length > 0 || words.length > 0;
+    noResults.hidden = !tokens.length || rows.length > 0 || words.length > 0 || hskWords.length > 0;
     if (!rows.length) noResultsText.textContent = `Nothing matches “${query.trim()}”.`;
     countEl.textContent = tokens.length ? `${rows.length} of ${plural(entries.length, 'list')}` : plural(entries.length, 'list');
   }
 
   async function load() {
-    const [lists, progress] = await Promise.all([store.getLists(), store.getProgress()]);
+    const [lists, progress, dict] = await Promise.all([store.getLists(), store.getProgress(), hskDictionary()]);
     if (destroyed) return;
+    hsk = dict;
     const now = Date.now();
     entries = lists.map((l) => makeEntry(l, progress, now));
     const ids = new Set(lists.map((l) => l.id));

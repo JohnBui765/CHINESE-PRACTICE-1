@@ -1,8 +1,10 @@
 // The word page: a sheet that shows how to write a word straight away. Its characters are drawn
 // stroke by stroke in 田字格 boxes, one after the other; tapping a box draws that character
 // again and shows its numbered stroke diagram. Under it: Write it, then the pinyin, meaning,
-// example sentence, the characters listed under the word and the progress. "Write it" turns the
-// same sheet into the writing practice (ui/drill.js).
+// example sentence, the HSK dictionary's sentences (all three for an HSK word; for a word of the
+// owner's lists, those of the same word and reading in HSK 1-3), the characters listed under the
+// word and the progress (not for an HSK word: it is not practised). "Write it" turns the same
+// sheet into the writing practice (ui/drill.js).
 // Opened from a list's rows, the Lists search, the pencil on a recall card, the results screen
 // and the writing mode.
 import { h } from './dom.js';
@@ -14,15 +16,41 @@ import * as store from '../data/store.js';
 import { strokeData } from '../data/strokes.js';
 import { charSets } from '../data/chars.js';
 import { chineseChars, isSentence } from '../core/extract.js';
-import { pinyinLabel, charWarnings } from '../core/lists.js';
+import { pinyinLabel, charWarnings, exampleUnderline } from '../core/lists.js';
+import { hskMatches } from '../core/hsk.js';
+import { hskDictionary } from '../data/hsk.js';
 import { WRITE_MAX_CHARS } from '../core/strokes.js';
 import { isDue, boxLabel } from '../core/srs.js';
 import { startOfDay, DAY } from '../core/util.js';
-import { exampleNode, partsNode, pinyinNode } from '../screens/practice/recall.js';
+import { exampleNode, partsNode, pinyinNode, sayButton } from '../screens/practice/recall.js';
 
 function say(text) {
   const s = store.settings();
   speak(text, { rate: s.speechRate, voiceURI: s.voiceURI });
+}
+
+// The sentences of an HSK entry, each with its speaker. more: on the page of one of the owner's
+// words, below its own sentence (own), which is left out here if the dictionary has it too.
+function hskExamples(he, { more = false, own = '' } = {}) {
+  const examples = he.examples.filter((x) => x.text !== own);
+  if (!examples.length) return null;
+  return h(
+    'div',
+    { class: 'rc-block wd-hsk' },
+    h('div', { class: 'rc-block-label' }, `${more ? 'More examples' : 'Examples'} · HSK ${he.hsk}`),
+    examples.map((x) => {
+      const ul = exampleUnderline({ word: he.word, example: x.text });
+      const zh = ul ? [x.text.slice(0, ul.start), h('span', { class: 'rc-ul' }, x.text.slice(ul.start, ul.end)), x.text.slice(ul.end)] : [x.text];
+      return h(
+        'div',
+        { class: 'wd-ex' },
+        h('div', { class: 'wd-ex-zh' }, h('div', { class: 'rc-example-zh kai', lang: 'zh' }, zh), sayButton(x.text, say, { className: 'rc-example-say' })),
+        x.pinyin ? h('div', { class: 'rc-example-py', lang: 'zh-Latn' }, x.pinyin) : null,
+        x.meaning ? h('div', { class: 'rc-example-en' }, x.meaning) : null,
+        x.unsure ? h('div', { class: 'rc-unsure' }, 'The AI was not sure about this sentence: check it.') : null,
+      );
+    }),
+  );
 }
 
 // "today" | "tomorrow" | "in 3 days"
@@ -68,10 +96,12 @@ export async function showWord(entry, { entries = [], progress, drill = false } 
 
 async function open(entry, { entries, progress, drill }) {
   const chars = [...chineseChars(entry.word || '')];
-  const [datas, sets, p] = await Promise.all([
+  const [datas, sets, p, dict] = await Promise.all([
     Promise.all(chars.map((ch) => strokeData(ch))),
     charSets(),
-    progress !== undefined ? progress : store.getProgress([entry.id]).then((m) => m.get(entry.id) || null, () => null),
+    // An HSK word is not practised, so it has no progress.
+    progress !== undefined || entry.hsk ? progress || null : store.getProgress([entry.id]).then((m) => m.get(entry.id) || null, () => null),
+    hskDictionary(),
   ]);
   const settings = store.settings();
   const writable = chars.length > 0 && chars.length <= WRITE_MAX_CHARS && datas.every(Boolean);
@@ -227,9 +257,10 @@ async function open(entry, { entries, progress, drill }) {
     h('div', { class: 'rc-row' }, pinyinNode(entry, 'rc-pinyin'), entry.meaning ? h('div', { class: 'rc-meaning' }, entry.meaning) : null),
     entry.unsure ? h('div', { class: 'rc-unsure' }, 'The AI was not sure about this line: check it.') : null,
     warning ? h('div', { class: ['ent-warn', warning.red && 'red'] }, warning.text) : null,
-    exampleNode(entry, { speak: say }),
+    entry.hsk ? hskExamples(entry) : exampleNode(entry, { speak: say }),
+    entry.hsk ? null : hskMatches(entry, dict.byWord).map((he) => hskExamples(he, { more: true, own: entry.example })),
     partsNode(entry, entries),
-    h('div', { class: 'rc-block' }, h('div', { class: 'rc-block-label' }, 'Progress'), h('div', { class: ['ent-status', status?.due && 'due'] }, status ? status.text : 'New · not practised yet')),
+    entry.hsk ? null : h('div', { class: 'rc-block' }, h('div', { class: 'rc-block-label' }, 'Progress'), h('div', { class: ['ent-status', status?.due && 'due'] }, status ? status.text : 'New · not practised yet')),
   );
 
   /* ---------- Write it ---------- */

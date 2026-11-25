@@ -334,6 +334,23 @@
   height: 32px;
   margin: -6px 0;
 }
+/* The HSK dictionary's sentences on the word page, each with its speaker beside it. */
+.wd-ex + .wd-ex {
+  margin-top: 14px;
+}
+.wd-ex-zh {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.wd-ex-zh .rc-example-zh {
+  flex: 1;
+  min-width: 0;
+}
+.wd-ex-zh .rc-example-say {
+  flex: none;
+  margin: 4px 0 0;
+}
 
 /* ---------- typed pinyin card ---------- */
 
