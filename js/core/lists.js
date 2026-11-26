@@ -107,6 +107,20 @@ const meaningWords = (s) => ` ${fold(s).replace(/[^a-z0-9']+/g, ' ').trim()}`;
 // "to go" and "go", "a book" and "book" mean the same here.
 const bare = (s) => s.replace(/^(to|a|an|the) /, '');
 
+// The pieces of a meaning: "to miss, to want" -> ['miss', 'want'].
+export const meaningParts = (meaning) =>
+  String(meaning ?? '')
+    .split(/[;,/]/)
+    .map((p) => bare(meaningWords(p).trim()))
+    .filter(Boolean);
+
+// Two entries mean the same when their meanings share a piece: 奶 and 牛奶 are both "milk",
+// 想 "to miss, to want" and 要 "to want" share "want". Entries without a meaning never do.
+export function sameMeaning(a, b) {
+  const mine = new Set(meaningParts(a?.meaning));
+  return meaningParts(b?.meaning).some((p) => mine.has(p));
+}
+
 // How well an entry matches what was typed: 0 exactly, 1 at the start of its pinyin or of a word
 // of its meaning, 2 somewhere inside (3 letters or more), -1 not at all. Chinese characters in
 // the query are looked for in the word; letters in the pinyin (tones optional) and the meaning.
@@ -137,11 +151,7 @@ export function matchEntry(entry, query) {
   const words = meaningWords(q).trim();
   if (words && entry.meaning) {
     const meaning = meaningWords(entry.meaning);
-    const parts = String(entry.meaning)
-      .split(/[;,/]/)
-      .map((p) => bare(meaningWords(p).trim()))
-      .filter(Boolean);
-    if (parts.includes(bare(words))) take(0);
+    if (meaningParts(entry.meaning).includes(bare(words))) take(0);
     else if (meaning.includes(` ${words}`)) take(1);
     else if (words.length >= 3 && meaning.includes(words)) take(2);
   }

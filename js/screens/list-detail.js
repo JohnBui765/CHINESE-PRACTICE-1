@@ -15,7 +15,7 @@ import { toLessonText, safeFileName } from '../core/extract.js';
 import { countLabel, matchEntry } from '../core/lists.js';
 import { writableChars } from '../core/strokes.js';
 import { debounce, plural } from '../core/util.js';
-import { MODES, SCOPES, practiceEntries, hasSideB, canTypePinyin } from './practice/session.js';
+import { MODES, SCOPES, practiceEntries, hasSideB, canTypePinyin, buildCards } from './practice/session.js';
 import { entryRow } from './import.js';
 
 const STAGES = [
@@ -144,13 +144,21 @@ export default async function create(params, ctx = {}) {
     const sideB = pool.filter(hasSideB).length;
     const writable = pool.filter((e) => writableChars(e.word, strokeSet)).length;
     const typable = pool.filter(canTypePinyin).length;
+    const gapCards = buildCards(list, 'cloze', { scope }).length;
+    const boards = buildCards(list, 'match', { scope });
+    const pairs = boards.reduce((n, b) => n + b.itemIds.length, 0);
+    const modeRow = (mode, count) =>
+      row({ icon: MODES[mode].icon, iconBg: MODES[mode].color, title: MODES[mode].label, subtitle: `${MODES[mode].short} · ${count}`, onTap: () => push('practice', { listId: list.id, mode }, { modal: true }) });
+    // Easiest first.
     const modeRows = [
       scopeRow,
-      row({ icon: MODES.recall.icon, iconBg: MODES.recall.color, title: MODES.recall.label, subtitle: `${MODES.recall.short} · ${pool.length} cards`, onTap: () => push('practice', { listId: list.id, mode: 'recall' }, { modal: true }) }),
-      row({ icon: MODES.recallReverse.icon, iconBg: MODES.recallReverse.color, title: MODES.recallReverse.label, subtitle: `${MODES.recallReverse.short} · ${sideB} cards`, onTap: () => push('practice', { listId: list.id, mode: 'recallReverse' }, { modal: true }) }),
-      row({ icon: MODES.choose.icon, iconBg: MODES.choose.color, title: MODES.choose.label, subtitle: `${MODES.choose.short} · ${sideB} cards`, onTap: () => push('practice', { listId: list.id, mode: 'choose' }, { modal: true }) }),
-      row({ icon: MODES.pinyin.icon, iconBg: MODES.pinyin.color, title: MODES.pinyin.label, subtitle: `${MODES.pinyin.short} · ${typable} cards`, onTap: () => push('practice', { listId: list.id, mode: 'pinyin' }, { modal: true }) }),
-      row({ icon: MODES.write.icon, iconBg: MODES.write.color, title: MODES.write.label, subtitle: `${MODES.write.short} · ${writable} cards`, onTap: () => push('practice', { listId: list.id, mode: 'write' }, { modal: true }) }),
+      modeRow('recall', `${pool.length} cards`),
+      modeRow('recallReverse', `${sideB} cards`),
+      modeRow('match', boards.length ? `${plural(pairs, 'pair')} on ${plural(boards.length, 'board')}` : '0 pairs'),
+      modeRow('choose', `${sideB} cards`),
+      modeRow('cloze', `${gapCards} cards`),
+      modeRow('pinyin', `${typable} cards`),
+      modeRow('write', `${writable} cards`),
     ];
     if (sum.due && sum.due < sum.total) modeRows.push(row({ icon: 'flame', iconBg: 'var(--orange)', title: 'Review what is due', subtitle: `${sum.due} of these cards are due now`, onTap: () => push('practice', { mode: 'review' }, { modal: true }) }));
 

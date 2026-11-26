@@ -13,8 +13,10 @@ import * as recall from './recall.js';
 import * as write from './write.js';
 import * as pinyin from './pinyin.js';
 import * as choose from './choose.js';
+import * as cloze from './cloze.js';
+import * as match from './match.js';
 
-const RENDERERS = { recall, write, pinyin, choose };
+const RENDERERS = { recall, write, pinyin, choose, cloze, match };
 const PRAISE = ['Correct!', 'Nice!', 'Great!', 'Well done!', 'Spot on!'];
 // After the footer changes (Show answer → grade buttons, a new card), taps are ignored this long:
 // the second tap of a double tap would otherwise hit the button that just took the first one's place.
@@ -76,6 +78,8 @@ export default async function create(params) {
       else if (params.mode === 'write') emptyMessage = { title: 'Nothing to write here', message: 'Writing works for words of 1 to 4 characters that have stroke data (the 3,500 common characters). Change what to practise, or pick another list.', icon: 'pencil' };
       else if (params.mode === 'pinyin') emptyMessage = { title: 'No pinyin to type', message: 'This mode needs entries with pinyin (words of up to 6 characters). Add pinyin with Edit list, or change what to practise.', icon: 'keyboard' };
       else if (params.mode === 'choose') emptyMessage = { title: 'Not enough words to choose from', message: 'This mode needs at least two entries with pinyin or a meaning in the list.', icon: 'target' };
+      else if (params.mode === 'cloze') emptyMessage = { title: 'No sentences to fill', message: 'This mode blanks a word in the list’s sentences: the example sentences (“= ” lines) and the sentences of a textbook text. Add example sentences with Hanzi Grid’s example prompt (prompts/examples.txt) or with Edit list, or change what to practise.', icon: 'blank' };
+      else if (params.mode === 'match') emptyMessage = { title: 'Not enough words to match', message: 'This mode needs at least two entries with a meaning (words of up to 6 characters). Add meanings with Edit list, or change what to practise.', icon: 'link' };
       else emptyMessage = { title: 'Nothing to practise', message: 'Change what to practise (Words, Characters or All) on the list page.' };
     }
   }
@@ -152,7 +156,7 @@ export default async function create(params) {
     footer.dataset.state = next;
     settle();
     if (answered()) {
-      fbIcon.replaceChildren(icon(next === 'right' ? 'checkCircle' : next === 'close' ? 'pencil' : 'xCircle', { size: 26 }));
+      fbIcon.replaceChildren(icon(fb.icon || (next === 'right' ? 'checkCircle' : next === 'close' ? 'pencil' : 'xCircle'), { size: 26 }));
       fbTitle.textContent = fb.title || '';
       fbDetail.textContent = fb.detail || '';
       fbDetail.hidden = !fb.detail;
@@ -177,11 +181,12 @@ export default async function create(params) {
     counter.textContent = `${Math.min(session.done, session.originalCount)}/${session.originalCount}`;
   }
 
-  function makeCtx(card, list, item) {
+  function makeCtx(card, list, item, items) {
     return {
       card,
       list,
       item,
+      items, // a Match board's entries, in its order (other cards: null)
       entries: list.entries,
       settings: store.settings(),
       strokes,
@@ -243,13 +248,14 @@ export default async function create(params) {
       return;
     }
     const list = lists.get(card.listId);
-    const item = list.entries.find((e) => e.id === card.itemId);
+    const item = list.entries.find((e) => e.id === card.itemId) || null;
+    const items = card.type === 'match' ? card.itemIds.map((id) => list.entries.find((e) => e.id === id)).filter(Boolean) : null;
     if (current?.destroy) current.destroy();
     setState('idle');
     extraHost.replaceChildren();
     extraHost.hidden = true;
     const renderer = RENDERERS[card.type] || recall;
-    current = renderer.render(card, makeCtx(card, list, item));
+    current = renderer.render(card, makeCtx(card, list, item, items));
     setPrimary(current.primaryLabel || 'Show answer', { ready: !!current.readyInitially });
     if (card.retry) current.el.prepend(h('div', { class: 'retry-tag' }, icon('refresh', { size: 14 }), 'Try again'));
     mount(current.el);
@@ -261,7 +267,7 @@ export default async function create(params) {
     currentEl.classList.add('checked');
     const fb = result.feedback || {};
     const title = result.correct ? fb.title || (result.hinted ? 'Correct — with a hint' : PRAISE[Math.floor(Math.random() * PRAISE.length)]) : fb.title || 'Not quite';
-    setState(result.correct ? 'right' : result.close ? 'close' : 'wrong', { title, detail: fb.detail });
+    setState(result.correct ? 'right' : result.close ? 'close' : 'wrong', { title, detail: fb.detail, icon: fb.icon });
     extraHost.hidden = true; // the strip (tone bar) is done; Continue moves down to the thumb
     if (!Object.keys(session.outcomes).length) pausedSave = commitPausedSession(session.id);
     answer(session, result);

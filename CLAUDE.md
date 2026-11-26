@@ -41,20 +41,21 @@ Two of the owner's apps were reused. Files copied **unchanged** stay unchanged, 
 app can be copied to the other:
 
 - From **Vocab Studio** (`English-Practice-1`): `css/app.css` (design system), `css/screens/`
-  (`today`, `lists`, `practice`, `mode-flashcard`, `settings`), `js/ui/` (`dom`, `components`,
-  `icons`, `router`, `viewport`, `clipboard`), `js/core/` (`util`, `srs`, `text`),
+  (`today`, `lists`, `practice`, `mode-flashcard`, `mode-cloze`, `settings`), `js/ui/` (`dom`,
+  `components`, `icons`, `router`, `viewport`, `clipboard`), `js/core/` (`util`, `srs`, `text`),
   `js/data/db.js`, `tools/serve.mjs`, the srs tests. Only storage names were changed (see
   "Hosting and offline"). `js/data/store.js`, `js/screens/practice/{session,practice,results}.js`,
-  `today.js`, `lists.js`, `settings.js` are adapted copies.
+  `js/screens/practice/cloze.js` (its "In context" mode, cut down to the word bank), `today.js`,
+  `lists.js`, `settings.js` are adapted copies.
 - From **Hanzi Grid**: `js/core/extract.js` (the lesson and reply reader), `js/core/pinyin.js`,
   `js/core/listedit.js`, `data/common3500.txt`, `data/font-chars.txt`, `fonts/` (the two subset
   fonts, licences), `prompts/`, their tests and fixtures. Unchanged.
-- New here: `js/core/{lists,strokes,pinyincheck,choose,drill,hsk}.js`, `js/data/{chars,sample,strokes,hsk}.js`,
+- New here: `js/core/{lists,strokes,pinyincheck,choose,drill,hsk,gaps,match}.js`, `js/data/{chars,sample,strokes,hsk}.js`,
   `js/ui/{files,strokes,word,drill}.js`, `js/ui/speech.js` (Vocab Studio's, pointed at Chinese voices),
-  `js/screens/{import,list-detail}.js`, `js/screens/practice/{recall,write,pinyin,choose}.js`,
+  `js/screens/{import,list-detail}.js`, `js/screens/practice/{recall,write,pinyin,choose,match}.js`,
   `css/screens/hanzi.css`, `tools/{update-sw,make-icons,make-strokes}.mjs`, `icons/`,
   `data/strokes/`, `data/hsk/`, the tests in
-  `tests/unit/{lists,session,strokes,pinyincheck,choose,speech,search,drill,hsk}.test.js` and
+  `tests/unit/{lists,session,strokes,pinyincheck,choose,speech,search,drill,hsk,gaps,match}.test.js` and
   `tests/e2e/flows.mjs`.
 
 ## Pronunciation
@@ -68,9 +69,11 @@ app can be copied to the other:
   voice to its downloaded copy. The app always speaks **characters**, never pinyin.
 - Speakers: the front of a recall card only when the characters are the question (hearing the
   word gives away the pinyin), the back of every recall card, example sentences, the word page
-  (Hear it), the pick-the-characters prompt, after a typed-pinyin answer, the results rows.
-  `autoSpeak` says the word when an answer is revealed (recall, pinyin, write) and when the
-  last write of "Write it" is done (inside that touch, so iOS allows it).
+  (Hear it), the pick-the-characters prompt, after a typed-pinyin answer, the results rows,
+  Fill the gap after Check (the sentence, the word), each row of a sorted Match board.
+  `autoSpeak` says the word when an answer is revealed (recall, pinyin, write), the whole
+  sentence at Fill the gap's Check, the word of each right Match pair, and when the last write
+  of "Write it" is done (always inside the tap or touch, so iOS allows it).
 - Settings: Voice (sheet: Automatic, best quality, standard, a raw list of every voice with
   Copy, and how to download a voice), Speed (0.5–1.2, default 0.9), "Say the word with the
   answer", Test voice (你好！我想喝水。).
@@ -100,6 +103,103 @@ app can be copied to the other:
   same text never twice; sentences over 6 characters never offered. Mode `choose`
   (`choose.js`): entries with a side B; the pool is the same kind of entry (words with words,
   the "> " characters with characters); tapping a tile answers; cards remember their `options`.
+
+## Fill the gap and Match the meanings
+
+Designed with the owner in `docs/next-learning-methods.md` (sections 2 and 3; their answers and
+what was decided where that file was unclear are at its top).
+
+- **Where the gaps come from** (`js/core/gaps.js`, pure; no AI: the list's own sentences, its
+  `= ` lines and its sentence entries, `listSentences`). `gapsOf(entries, entry)` →
+  `[{ from, src, start, end, answerId }]`:
+  - a **word** (depth 0): its own `= ` line when it contains the word (`exampleUnderline`); a
+    word of 2+ characters also every other sentence of the list that contains it (哪儿 has three
+    in Bài 7). A single character never borrows: 天 would be "found" inside 明天;
+  - a **sentence** (depth 0 with punctuation): one of its chunks (`> ` lines), never a chunk that
+    is the whole sentence (你好！, 不客气。); the card grades the sentence, the chunk fills the
+    gap (`answerId`);
+  - a **chunk** (a `> ` line under a sentence): its own `= ` line, else its place in its sentence;
+  - a **character** (a `> ` line under a word): its own `= ` line, else its place inside its
+    word, wherever the word is blanked (超 under 超市: ［ ］市在哪儿？ or 明天我去［ ］市。); the
+    order of the `> ` lines gives the place (姐姐's first 姐 line is the first 姐);
+  - `>> ` lines (parts of parts): no gap.
+  `partSpans(text, parts)` finds the chunks (and a word's characters) by walking along the text
+  part by part, stepping over punctuation (你好！我是王明。); a part that does not come next is
+  looked for anywhere, and left out when it is not there. Positions are string indexes into the
+  box text, as in `exampleUnderline`.
+- **The card** (`clozeCard`): one of the entry's gaps, at random,
+  `{ listId, type: 'cloze', itemId, from, src, start, end, options }`. `from` = the entry whose
+  sentence is used; `src` = `'example'` (its `= ` line) or `'sentence'` (the entry itself is the
+  sentence; a sentence entry can also have a `= ` line); `options` = the word bank's ids, kept
+  (like Pick the characters) so a resumed or repeated card shows the same chips.
+  `gapOnCard(entries, card)` → the sentence (`text`, `pinyin`, `english`) split around the gap
+  (`before`, `gap`, `after`), the `answer` (the option whose characters are the gap's text) and
+  the `options`, or null once the sentence is gone or the text in the gap is no longer one of
+  the bank's words (Edit list); `cardResolves` uses it.
+- **The word bank** (`bankFor`): up to 8 (`BANK_SIZE`) through `chooseOptions` (the confusable
+  words first): the same kind as the answer (words with words; characters and chunks with
+  characters and chunks), never a sentence entry, never an entry that means the same
+  (`sameMeaning`, below: 奶 and 牛奶). Fewer than 2 → no card.
+- **Mode `cloze`** (`js/screens/practice/cloze.js`): Vocab Studio's "In context" mode with the
+  word bank only (no typed answer: the iPhone's Chinese keyboard would suggest the word). The
+  label FILL THE GAP, the sentence in KaiTi with the gap, its English under it from the start
+  (two words can fit one gap: 我去买＿＿。), the chips in KaiTi. A tap on a chip drops it into
+  the gap; a tap on it or on the gap takes it back; Check stays disabled until the gap is filled.
+  **Hint** (then "Another hint"; a double tap uses one): first the missing word's pinyin and
+  meaning in an orange box, then half the wrong chips (rounded down) fade and are disabled; any
+  hint makes the answer `hinted` (keeps the box). After Check: the gap green, or the choice
+  struck through in red with the answer beside it; the right chip green, a wrong choice red; the
+  sentence's pinyin appears under it (never before: `splitPinyin` cannot cut a sentence with 儿
+  inside, so a pinyin line with a gap would sometimes be wrong); then the answer word with its
+  pinyin, a speaker, the pencil (`showWord`) and its meaning; a speaker for the sentence in the
+  card's head; `autoSpeak` says the whole sentence inside the Check tap. The footer's detail:
+  word · pinyin · meaning.
+- **Its styles:** `css/screens/mode-cloze.css` is Vocab Studio's, unchanged. The gap's width is
+  set through its `--cz-w` variable to 2.4em for every answer (Vocab Studio sizes it by the
+  answer), so the gap never tells how many characters are missing. The Chinese parts are in
+  `hanzi.css` (`.cz-sentence.kai` 28 px, the chips in KaiTi 26 px, normal weight because KaiTi
+  has no bold; the `gp-` classes).
+- **Which entries can be matched** (`js/core/match.js`, pure): `canMatch` = a meaning and 1–6
+  Chinese characters (short sentences such as 不客气。 too). `clash(a, b)` = the same characters,
+  or a meaning in common: `sameMeaning` in `js/core/lists.js` compares meanings piece by piece
+  (`meaningParts`: split at ; , / with a leading "to", "a", "an" or "the" dropped), so 想 "to
+  miss, to want" and 要 "to want" clash.
+- **Boards** (`makeBoards`): ⌈n/7⌉ boards, as even as possible (10 → 5 + 5, 13 → 7 + 6, 19 →
+  7 + 6 + 6). The entries are shuffled, then each goes on the board with the most room where
+  nothing clashes with it, else on the board with the most room anyway; `isPair` then accepts
+  either match of the two. Each board is in lesson order. On Bài 3–4, everything (59 entries,
+  9 boards), the four 国, 姐姐/姐/姐, 吗/呢 and 朋/友 stay apart. A card is a board:
+  `{ listId, type: 'match', itemIds: [...] }`.
+- **Mode `match`** (`js/screens/practice/match.js`): two columns in one grid, so the rows line
+  up (cells at least 56 px): the Chinese in KaiTi on the left (lesson order, no pinyin), the
+  meanings on the right, shuffled and never in the very order of the words. Tap an item in one
+  column, then one in the other (another tap in the same column moves the selection; the same
+  item again deselects it). Right: both turn green and stay in place, and the word is said
+  (`autoSpeak`, inside the tap). Wrong: both shake red for 0.4 s and are deselected; it is a miss
+  for the entry of the item tapped first. The footer button is disabled and counts down ("4
+  pairs left"); the last match grades the board, as Pick the characters does: green "Every pair
+  right the first time.", else orange "Missed: 明天, 东西" with "It comes back at the end." /
+  "They come back at the end." and a refresh icon when a retry board follows (`practice.js` lets
+  a result set its banner icon, `feedback.icon`). The board never auto-continues
+  (`noAutoAdvance`). 350 ms later it is sorted: each meaning slides beside its word, the pinyin
+  appears under each word, the missed rows turn orange and each row gets a speaker; a tap then
+  opens the word page.
+- **Grading a board** (`answer()` in `session.js`): each entry of `result.items`
+  (`[{ itemId, correct }]`) is recorded on its own under `match:<itemId>`, the first time only, so
+  the entries that top up a board never count twice. The missed ones come back at the end on a
+  smaller board (`retryBoard`: the missed entries topped up to 4 with matched ones of the same
+  board, in its order), at most `MAX_RETRIES` times. `cardResolves` is true while 2 of a board's
+  entries exist; `practice.js` passes them as `ctx.items`. The header counts boards, the results
+  count entries. A board is saved when it is finished: closing the app in the middle of one
+  starts that board again. "Practise mistakes" deals the missed entries into boards and tops a
+  board up to 4 with entries of the list that clash with none of it (`spare`); those top-ups are
+  graded too (their first try in that session).
+- **On the list page:** "Match the meanings · Up to 7 words at a time · 10 pairs on 2 boards" and
+  "Fill the gap · Pick the missing word · 10 cards" (both counted with `buildCards`). Colours:
+  `--brown` (#a2845e, defined in `hanzi.css`; no other mode uses it) for Match, `--green` for
+  Fill the gap; icons `link` and `blank` (already in the unchanged `icons.js`). With nothing to
+  practise, Fill the gap says how to add sentences (Hanzi Grid's example prompt,
+  `prompts/examples.txt`, or Edit list); Match asks for two entries with a meaning.
 
 ## Stroke order (data and rules)
 
@@ -285,8 +385,10 @@ restored after iOS evicts the app; modals from the bottom).
   copy`, an echoed format example, repeats removed, a wrong `# total`), a preview of the entries,
   Save. A draft survives the app being closed (24 h).
 - **List** (`list-detail.js`): New / Learning / Reviewing / Mastered for the current scope; the
-  **Practise** control (Words · Characters · All, the `scope` setting); the two modes with their
-  card counts; "Review what is due"; every entry as a row (KaiTi, print form, pinyin with arrow,
+  **Practise** control (Words · Characters · All, the `scope` setting); the seven modes, easiest
+  first, with their card counts (Word → Pinyin & meaning, Pinyin & meaning → Word, Match the
+  meanings, Pick the characters, Fill the gap, Type the pinyin, Write the characters); "Review
+  what is due"; every entry as a row (KaiTi, print form, pinyin with arrow,
   meaning, example in KaiTi with pinyin and English, progress, warnings), parts indented, with a
   search box above them that keeps the entries that match (`matchEntry`, lesson order; the box
   is made once, so the keyboard stays up when the page refreshes); a tap opens the word page.
@@ -303,14 +405,19 @@ restored after iOS evicts the app; modals from the bottom).
 ### Practice rules
 
 - **Scope:** `words` = entries at depth 0 (words and sentences), `chars` = depth ≥ 1, `all`.
-- **Modes:** `recall` (Word → Pinyin & meaning) makes one card per entry in scope;
-  `recallReverse` (Pinyin & meaning → Word) and `choose` (Pick the characters) only for entries
-  with pinyin or meaning; `pinyin` (Type the pinyin) for entries with pinyin and ≤ 6
-  characters; `write` (Write the characters) only for words of 1–4 characters with stroke data.
-  Cards are `{ listId, type: 'recall', itemId, dir: 'word' | 'meaning' }`,
-  `{ type: 'write', chars }`, `{ type: 'pinyin' }` or `{ type: 'choose', options: [ids] }`.
-  Every type updates the same progress record; the worst outcome of an entry's cards in a
-  session counts. The Today review uses recall cards in both directions.
+- **Modes** (in the list page's order, easiest first): `recall` (Word → Pinyin & meaning) makes
+  one card per entry in scope; `recallReverse` (Pinyin & meaning → Word) only for entries with
+  pinyin or meaning; `match` (Match the meanings) boards of up to 7 entries with a meaning and
+  1–6 characters; `choose` (Pick the characters) for entries with pinyin or meaning; `cloze`
+  (Fill the gap) for entries that have a gap in one of the list's sentences and a word bank;
+  `pinyin` (Type the pinyin) for entries with pinyin and ≤ 6 characters; `write` (Write the
+  characters) only for words of 1–4 characters with stroke data. Cards are
+  `{ listId, type: 'recall', itemId, dir: 'word' | 'meaning' }`, `{ type: 'write', chars }`,
+  `{ type: 'pinyin' }`, `{ type: 'choose', options: [ids] }`,
+  `{ type: 'cloze', itemId, from, src, start, end, options }` or `{ type: 'match', itemIds }`
+  (no `itemId`: a board holds several entries; see "Fill the gap and Match the meanings").
+  Every type updates the same progress record (a board: each of its entries); the worst outcome
+  of an entry's cards in a session counts. The Today review uses recall cards in both directions.
 - **Review (Today):** cards due now across all lists. An entry that has ever been practised comes
   back whatever the scope setting; never-practised entries count only inside the scope. Entries
   being learned come before brand-new ones; the limit is `reviewLimit`; each card gets a random
@@ -325,14 +432,15 @@ restored after iOS evicts the app; modals from the bottom).
 index.html, manifest.webmanifest, sw.js
 css/app.css, css/screens/*.css           design system; hanzi.css = fonts + Chinese pieces
 js/app.js                                boot: database, settings, theme, router, service worker
-js/core/   extract.js pinyin.js listedit.js (Hanzi Grid) · util.js srs.js text.js (Vocab Studio) · lists.js strokes.js pinyincheck.js choose.js drill.js hsk.js (new)
+js/core/   extract.js pinyin.js listedit.js (Hanzi Grid) · util.js srs.js text.js (Vocab Studio) · lists.js strokes.js pinyincheck.js choose.js drill.js hsk.js gaps.js match.js (new)
 js/data/   db.js store.js chars.js sample.js strokes.js hsk.js
 js/ui/     dom.js components.js icons.js router.js viewport.js clipboard.js files.js strokes.js word.js drill.js speech.js
 js/screens/ today.js lists.js import.js list-detail.js settings.js index.js
-js/screens/practice/ session.js practice.js recall.js write.js pinyin.js choose.js results.js
+js/screens/practice/ session.js practice.js recall.js write.js pinyin.js choose.js cloze.js match.js results.js
 vendor/ hanzi-writer.esm.js (+ licence, VERSIONS.txt)
 fonts/ data/ (common3500, font-chars, strokes/, stroke-chars, hsk/) prompts/ icons/
 tests/unit/*.test.js (npm test) · tests/e2e/flows.mjs (npm run e2e) · tests/fixtures/
+docs/next-learning-methods.md            the design of Fill the gap and Match the meanings (not shipped)
 tools/ serve.mjs update-sw.mjs make-icons.mjs make-strokes.mjs (cache in tools/cache/, not in git)
 ```
 
@@ -342,7 +450,10 @@ session → results → Today stats → paste Bài 7 → the word page (two boxe
 cells, a tap on 奶 shows 5) → the list page's search (chao: 超市, 超) → Write it on 超市 (both
 traced, 超 from memory with its first stroke drawn backwards once, so Copy comes, then 市 and the
 whole word; the end screen) → pick the characters (the tile matching the pinyin shown) → type
-the pinyin (one card with the tone bar, one typed with marks) → a writing card → the Settings
+the pinyin (one card with the tone bar, one typed with marks) → a writing card → Fill the gap
+(a right answer, both hints then right, a wrong one with the struck-through word) → Match the
+meanings (a wrong pair first, the orange banner, the second board, the retry board of 4, results
+at 90%) → the Settings
 pronunciation section and voice sheet (no voices in headless Chromium) → the Lists search
 (chao: 超, 超市; the 超市 row says HSK 1 and its page has More examples · HSK 1) → the HSK section
 (shui: 水 and 睡觉; 水's page has three sentences with speakers and no progress) → manifest id →
@@ -368,8 +479,11 @@ transform, so the real Hanzi Writer quiz checks them). Screenshots in `tests/out
 3c. **HSK 1–3 dictionary** — done (asked for before 4; see "HSK dictionary"). Not built: HSK 4–6
    (with the faster search), practising HSK words. Not verified: the AI-written sentences by a
    person.
-4. **Sentences:** fill the blank in an example sentence from a word bank, put a sentence's chunks
-   in order, dictation (hear the sentence, write the characters or the pinyin).
+4. **Sentences** — partly done (2026-11-26): **Fill the gap** (a word bank, in the list's example
+   sentences and textbook sentences) and, asked for with it, **Match the meanings** (see "Fill
+   the gap and Match the meanings"). To do: put a sentence's chunks in order, dictation (hear the
+   sentence, write the characters or the pinyin). Not verified on the owner's iPhone: tapping
+   chips and cells with a finger, the speech.
 5. **Polish:** the AI prompt flow (Copy prompt / paste reply, filling in pinyin, meanings and
    example sentences like Hanzi Grid), README checklist on the owner's iPhone, a shared
    character bank across lists.

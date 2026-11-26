@@ -2,6 +2,7 @@
 // IndexedDB does not exist in Node, so the store falls back to memory, which is enough here.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { readText } from '../../js/core/extract.js';
 import { withIds } from '../../js/core/lists.js';
 import * as store from '../../js/data/store.js';
@@ -125,4 +126,69 @@ test('cardResolves and liveCards drop cards whose entry is gone', () => {
   assert.equal(cardResolves({ ...good, listId: 'nope' }, lists), false);
   const session = createSession({ mode: 'recall', cards: [gone, good] });
   assert.deepEqual(liveCards(session, lists), [{ ...good, retry: 0 }]);
+});
+
+const BAI7 = await readFile(new URL('../fixtures/bai7.txt', import.meta.url), 'utf8');
+const bai7List = (id) => ({ id, name: 'Bài 7', rawText: BAI7, entries: withIds(readText(BAI7, 'x').entries) });
+
+test('Fill the gap: a card for each entry that has a sentence, with its gap and word bank', () => {
+  const list = bai7List('L5');
+  assert.equal(buildCards(list, 'cloze', { scope: 'words' }).length, 10);
+  assert.equal(buildCards(list, 'cloze', { scope: 'chars' }).length, 9);
+  const cards = buildCards(list, 'cloze', { scope: 'all' });
+  assert.equal(cards.length, 19);
+  const lists = new Map([[list.id, list]]);
+  for (const c of cards) {
+    assert.ok(c.options.length >= 2 && c.options.length <= 8, `${c.options.length} words in the bank`);
+    assert.equal(cardResolves(c, lists), true);
+  }
+  // Edit list changes the sentence: the card no longer shows.
+  const dongxi = list.entries.find((e) => e.word === '东西');
+  const card = cards.find((c) => c.itemId === dongxi.id);
+  const edited = { ...list, entries: list.entries.map((e) => (e.id === dongxi.id ? { ...e, example: '我买东西。' } : e)) };
+  assert.equal(cardResolves(card, new Map([[list.id, edited]])), false);
+});
+
+test('Match: boards of the list, each entry graded on its own, the missed ones back at the end', async () => {
+  const list = await store.saveList(bai7List('L6'));
+  const cards = buildCards(list, 'match', { scope: 'words', rng: seq([0.3, 0.7, 0.1]) });
+  assert.deepEqual(cards.map((c) => c.itemIds.length), [5, 5]);
+  assert.ok(cards.every((c) => c.type === 'match' && c.listId === list.id));
+  const [b1, b2] = cards;
+  const session = createSession({ mode: 'match', listId: list.id, cards });
+  assert.equal(session.originalCount, 2, 'the header counts boards');
+  // Board 1: its first entry was the item tapped first in a wrong pair.
+  answer(session, { correct: false, close: true, items: b1.itemIds.map((id, i) => ({ itemId: id, correct: i !== 0 })) });
+  assert.equal(session.done, 0, 'its missed entry comes back, so the board is not done');
+  const retry = session.queue[session.queue.length - 1];
+  assert.equal(retry.itemIds.length, 4);
+  assert.ok(retry.itemIds.includes(b1.itemIds[0]));
+  assert.equal(retry.retry, 1);
+  // The session survives being saved as JSON (resuming after iOS closes the app).
+  const resumed = JSON.parse(JSON.stringify(session));
+  answer(resumed, { correct: true, items: b2.itemIds.map((id) => ({ itemId: id, correct: true })) });
+  answer(resumed, { correct: true, items: retry.itemIds.map((id) => ({ itemId: id, correct: true })) });
+  assert.equal(isFinished(resumed), true);
+  assert.equal(resumed.done, 2);
+  const sum = summarize(resumed);
+  assert.equal(sum.total, 10, 'the results count entries');
+  assert.equal(sum.wrong, 1, 'only the first try counts');
+  assert.equal(sum.accuracy, 90);
+  assert.deepEqual(sum.missed, [{ itemId: b1.itemIds[0], listId: list.id }]);
+  await commit(resumed);
+  const progress = await store.getProgressForList(list.id);
+  assert.equal(progress.size, 10);
+  assert.equal(progress.get(b1.itemIds[0]).box, 1, 'the missed entry goes to box 1');
+});
+
+test('Match: a board shows while 2 of its entries exist; "Practise mistakes" tops a board up to 4', () => {
+  const list = bai7List('L7');
+  const lists = new Map([[list.id, list]]);
+  const [a, b] = list.entries;
+  assert.equal(cardResolves({ listId: list.id, type: 'match', itemIds: [a.id, b.id, 'gone'] }, lists), true);
+  assert.equal(cardResolves({ listId: list.id, type: 'match', itemIds: [a.id, 'gone'] }, lists), false);
+  const mistakes = buildCards(list, 'match', { scope: 'all', itemIds: [a.id] });
+  assert.equal(mistakes.length, 1);
+  assert.equal(mistakes[0].itemIds.length, 4);
+  assert.ok(mistakes[0].itemIds.includes(a.id));
 });

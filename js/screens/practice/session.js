@@ -6,12 +6,17 @@ import { newProgress, practise, dueItems } from '../../core/srs.js';
 import { writableChars } from '../../core/strokes.js';
 import { chooseOptions } from '../../core/choose.js';
 import { chineseChars } from '../../core/extract.js';
+import { clozeCard, listSentences, gapOnCard } from '../../core/gaps.js';
+import { canMatch, makeBoards, retryBoard } from '../../core/match.js';
 import * as store from '../../data/store.js';
 
+// In the order of the list page, easiest first.
 export const MODES = {
   recall: { key: 'recall', label: 'Word → Pinyin & meaning', short: 'See the characters, recall the rest', icon: 'cards', color: 'var(--accent)' },
   recallReverse: { key: 'recallReverse', label: 'Pinyin & meaning → Word', short: 'Recall the characters, then check', icon: 'eye', color: 'var(--purple)' },
+  match: { key: 'match', label: 'Match the meanings', short: 'Up to 7 words at a time', icon: 'link', color: 'var(--brown)' },
   choose: { key: 'choose', label: 'Pick the characters', short: 'From four words of the lesson', icon: 'target', color: 'var(--pink)' },
+  cloze: { key: 'cloze', label: 'Fill the gap', short: 'Pick the missing word', icon: 'blank', color: 'var(--green)' },
   pinyin: { key: 'pinyin', label: 'Type the pinyin', short: 'Letters, then tap the tone', icon: 'keyboard', color: 'var(--blue)' },
   write: { key: 'write', label: 'Write the characters', short: 'Draw every stroke in order', icon: 'pencil', color: 'var(--teal)' },
   review: { key: 'review', label: 'Review', short: 'Words due today', icon: 'flame', color: 'var(--orange)' },
@@ -77,6 +82,20 @@ export function buildCards(list, mode, { itemIds = null, scope = 'words', rng = 
       const options = chooseOptions(all, e, { rng, pool });
       if (options && options.length >= 2) cards.push({ listId: list.id, type: 'choose', itemId: e.id, options });
     }
+  } else if (mode === 'cloze') {
+    // Each card remembers its sentence, its gap and its word bank (see core/gaps.js).
+    const sentences = listSentences(list.entries || []);
+    cards = practiceEntries(list, scope)
+      .filter(wanted)
+      .map((e) => clozeCard(list, e, { rng, sentences }))
+      .filter(Boolean);
+  } else if (mode === 'match') {
+    // A card is a board of up to 7 entries. "Practise mistakes" (itemIds) tops a small board up
+    // to 4 with other entries of the list.
+    const matchable = (list.entries || []).filter(canMatch);
+    const chosen = practiceEntries(list, scope).filter((e) => wanted(e) && canMatch(e));
+    const spare = itemIds ? matchable.filter((e) => !itemIds.includes(e.id)) : [];
+    cards = makeBoards(chosen, { rng, spare, lesson: list.entries || [] }).map((ids) => ({ listId: list.id, type: 'match', itemIds: ids }));
   } else {
     const dir = mode === 'recallReverse' ? 'meaning' : 'word';
     cards = practiceEntries(list, scope)
@@ -160,6 +179,7 @@ export function currentCard(session) {
 export function answer(session, result) {
   const card = currentCard(session);
   if (!card) return session;
+  if (card.type === 'match') return answerBoard(session, card, result);
   const key = cardKey(card);
   const outcome = result.correct ? (result.hinted ? 'hinted' : 'right') : 'wrong';
   if (!session.outcomes[key]) {
@@ -173,6 +193,29 @@ export function answer(session, result) {
   }
   if (!result.correct && card.retry < MAX_RETRIES) {
     session.queue.push({ ...card, retry: card.retry + 1 });
+  } else {
+    session.done += 1;
+  }
+  session.index += 1;
+  saveSnapshot(session);
+  return session;
+}
+
+// A Match board holds several entries: `result.items` = [{ itemId, correct }]. Each entry is
+// recorded on its own, the first time it is matched in the session only (so the entries that
+// top up a board of missed ones never count twice). The missed ones come back at the end on a
+// smaller board, at most MAX_RETRIES times, like a wrong card.
+function answerBoard(session, card, result) {
+  const items = Array.isArray(result.items) ? result.items : [];
+  for (const { itemId, correct } of items) {
+    const key = `match:${itemId}`;
+    if (session.outcomes[key]) continue;
+    session.outcomes[key] = { itemId, listId: card.listId, type: 'match', first: correct ? 'right' : 'wrong', score: correct ? 1 : 0 };
+  }
+  const missed = items.filter((x) => !x.correct).map((x) => x.itemId);
+  if (missed.length && card.retry < MAX_RETRIES) {
+    const ids = retryBoard(items.map((x) => x.itemId), missed);
+    session.queue.push({ ...card, itemIds: ids, retry: card.retry + 1 });
   } else {
     session.done += 1;
   }
@@ -286,9 +329,13 @@ export function clearSnapshot(id) {
 }
 
 // Whether a card can still be shown: its list and entry exist. `lists`: Map<listId, list>.
+// A Match board needs 2 of its entries; a gap card needs its sentence and gap (core/gaps.js).
 export function cardResolves(card, lists) {
-  const list = lists.get(card.listId);
-  return !!list?.entries?.some((e) => e.id === card.itemId);
+  const entries = lists.get(card.listId)?.entries;
+  if (!entries) return false;
+  if (card.type === 'match') return (card.itemIds || []).filter((id) => entries.some((e) => e.id === id)).length >= 2;
+  if (!entries.some((e) => e.id === card.itemId)) return false;
+  return card.type === 'cloze' ? !!gapOnCard(entries, card) : true;
 }
 
 // The cards still to do that can be shown (lists may have been edited or deleted meanwhile).

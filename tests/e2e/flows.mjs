@@ -254,6 +254,130 @@ try {
   await page.getByRole('button', { name: 'End session' }).click();
   await page.getByRole('button', { name: 'Done' }).click();
   await idle();
+
+  // 4k. Fill the gap: the sentences are the list's "= " lines. A right answer, one after both
+  // hints, then a wrong one (the chosen word struck through, the answer beside it).
+  const card = () => page.locator('.practice-card:not(.leaving)');
+  const exact = (s) => new RegExp(`^${s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`);
+  const examples = [...text.matchAll(/^= ([^|]+?)\s*\|/gm)].map((m) => m[1].trim());
+  // The chip that fills the gap: the text around the gap belongs to one of the list's sentences.
+  const gapAnswer = async () => {
+    const { before, after, chips } = await card().evaluate((el) => {
+      const sentence = el.querySelector('.cz-sentence');
+      const blank = sentence.querySelector('.cz-blank');
+      let before = '';
+      let after = '';
+      let seen = false;
+      for (const n of sentence.childNodes) {
+        if (n === blank) seen = true;
+        else if (seen) after += n.textContent;
+        else before += n.textContent;
+      }
+      return { before, after, chips: [...el.querySelectorAll('.cz-bank .chip')].map((c) => c.textContent) };
+    });
+    const fits = examples.filter((x) => x.startsWith(before) && x.endsWith(after) && x.length > before.length + after.length).map((x) => x.slice(before.length, x.length - after.length));
+    const answer = chips.find((c) => fits.includes(c));
+    assert.ok(answer, `a chip fills ${before}＿${after}`);
+    return answer;
+  };
+  const chipFor = (word) => card().locator('.cz-bank .chip', { hasText: exact(word) });
+  await page.getByText('Fill the gap').first().click();
+  await page.locator('.cz').waitFor();
+  await idle();
+  let answer = await gapAnswer();
+  await chipFor(answer).click();
+  assert.equal((await card().locator('.cz-blank').textContent()).trim(), answer, 'the chip drops into the gap');
+  await page.getByRole('button', { name: 'Check' }).click();
+  await page.locator('.practice-footer[data-state="right"]').waitFor();
+  await card().locator('.gp-pinyin').waitFor(); // the sentence's pinyin appears after Check
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: shot('18-fill-gap.png') });
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await page.waitForTimeout(600);
+  answer = await gapAnswer();
+  await card().getByRole('button', { name: 'Hint' }).click();
+  await card().locator('.cz-callout').waitFor();
+  await page.waitForTimeout(400); // a double tap on Hint uses only one hint
+  await card().getByRole('button', { name: 'Another hint' }).click();
+  await page.waitForFunction(() => document.querySelectorAll('.practice-card:not(.leaving) .cz-bank .chip.dim').length >= 1);
+  assert.equal(await chipFor(answer).isDisabled(), false, 'the answer never fades');
+  await chipFor(answer).click();
+  await page.getByRole('button', { name: 'Check' }).click();
+  await page.locator('.practice-footer[data-state="right"]').waitFor();
+  assert.equal(await page.locator('.pf-title').textContent(), 'Correct — with a hint');
+  await page.waitForTimeout(400);
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await page.waitForTimeout(600);
+  answer = await gapAnswer();
+  const wrongWord = (await card().locator('.cz-bank .chip').allTextContents()).find((w) => w !== answer);
+  await chipFor(wrongWord).click();
+  await page.getByRole('button', { name: 'Check' }).click();
+  await page.locator('.practice-footer[data-state="wrong"]').waitFor();
+  assert.equal(await card().locator('.cz-was').textContent(), wrongWord, 'the wrong choice is struck through');
+  assert.equal(await card().locator('.cz-ans').textContent(), answer);
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: shot('19-fill-gap-wrong.png') });
+  await page.getByRole('button', { name: 'End practice' }).click();
+  await page.getByRole('button', { name: 'End session' }).click();
+  await page.getByRole('button', { name: 'Done' }).click();
+  await idle();
+
+  // 4l. Match the meanings: 10 words on two boards of 5. A wrong pair first (it counts against
+  // the word tapped first), then every pair; the missed word comes back on a board of 4.
+  const meaningOf = new Map(); // word -> meaning, from the Bài 7 fixture
+  for (const line of text.split(/\r?\n/)) {
+    const m = line.match(/^([^|=#>\s][^|]*?)\s*\|\s*[^|]*?\s*\|\s*(.+)$/);
+    if (m) meaningOf.set(m[1].trim(), m[2].trim());
+  }
+  const playBoard = async ({ mistake = false } = {}) => {
+    const board = card().locator('.mt-board');
+    const words = (await board.locator('.mt-zh').allTextContents()).map((w) => w.trim());
+    if (mistake) {
+      const wrong = (await board.locator('.mt-en').allTextContents()).find((m) => m !== meaningOf.get(words[0]));
+      await board.locator('.mt-zh').nth(0).click();
+      await board.locator('.mt-en', { hasText: exact(wrong) }).click();
+      await board.locator('.mt-cell.wrong').first().waitFor();
+      await page.screenshot({ path: shot('20-match-wrong-pair.png') });
+    }
+    for (let i = 0; i < words.length; i++) {
+      await board.locator('.mt-zh').nth(i).click();
+      await board.locator('.mt-en', { hasText: exact(meaningOf.get(words[i])) }).click();
+    }
+    return words;
+  };
+  await page.getByText('Match the meanings').first().click();
+  await page.locator('.mt').waitFor();
+  await idle();
+  assert.equal(await page.locator('.pt-count').textContent(), '0/2', 'the header counts boards');
+  const firstBoard = await playBoard({ mistake: true });
+  assert.equal(firstBoard.length, 5);
+  await page.locator('.practice-footer[data-state="close"]').waitFor();
+  assert.equal(await page.locator('.pf-title').textContent(), `Missed: ${firstBoard[0]}`);
+  await card().locator('.mt-board.sorted').waitFor();
+  await page.waitForTimeout(600); // the meanings slide beside their words
+  const order = await card().locator('.mt-board .mt-cell').evaluateAll((els) => els.map((x) => x.dataset.id));
+  for (let i = 0; i < order.length; i += 2) assert.equal(order[i], order[i + 1], 'each meaning beside its word');
+  assert.equal(await card().locator('.mt-zh.missed').count(), 1);
+  assert.equal(await card().locator('.mt-say').count(), 5, 'a speaker on every row');
+  await page.screenshot({ path: shot('21-match-sorted.png') });
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await page.waitForTimeout(600);
+  assert.equal((await playBoard()).length, 5);
+  await page.locator('.practice-footer[data-state="right"]').waitFor();
+  await page.waitForTimeout(400);
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await page.waitForTimeout(600);
+  await card().locator('.retry-tag').waitFor();
+  const retryWords = await playBoard();
+  assert.equal(retryWords.length, 4, 'the missed word, topped up to 4');
+  assert.ok(retryWords.includes(firstBoard[0]));
+  await page.locator('.practice-footer[data-state="right"]').waitFor();
+  await page.waitForTimeout(400);
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await page.getByText('90%').waitFor(); // 9 of the 10 words right the first time
+  await page.screenshot({ path: shot('22-match-results.png') });
+  await page.getByRole('button', { name: 'Done' }).click();
+  await idle();
   await page.locator('.nav-back').first().click();
   await idle();
   await page.getByText('2 lists').waitFor();

@@ -785,3 +785,102 @@ html.kb-open .practice-stage {
   cursor: pointer;
 }
 .res-open:active { background: var(--fill); }
+
+/* ---------- Fill the gap: the Chinese parts (the card itself is mode-cloze.css, Vocab Studio's, unchanged) ---------- */
+
+/* KaiTi has a single weight: a synthetic bold would smudge the strokes. */
+.cz-sentence.kai {
+  font-size: 28px;
+  line-height: 44px;
+  letter-spacing: 0.02em;
+}
+.cz-sentence.kai .cz-blank,
+.cz-sentence.kai .cz-was { font-weight: 400; }
+.gp-pinyin {
+  margin: 4px 0 0;
+  font-size: 17px;
+  line-height: 23px;
+  font-weight: 600;
+  color: var(--label);
+  animation: cz-in 280ms var(--ease-out);
+}
+.gp-english {
+  margin: 6px 0 0;
+  font-size: 16px;
+  line-height: 22px;
+  color: var(--label-2);
+}
+.gp-hint-py { font-weight: 600; }
+.cz-bank .chip.kai {
+  min-width: 64px;
+  font-size: 26px;
+  font-weight: 400;
+}
+.cz-word-text.kai {
+  font-size: 30px;
+  line-height: 1.2;
+  font-weight: 400;
+}
+.gp-word-py { font-size: 17px; }
+.cz-word .gp-strokes { flex: none; margin-right: -8px; }
+.cz-word .cz-speak { margin-right: 0; }
+.cz-head .gp-say { flex: none; margin: -11px -10px -11px 0; }
+
+/* ---------- Match the meanings ---------- */
+
+/* The mode's colour on the list page: no other mode uses it. */
+:root { --brown: #a2845e; }
+
+.mt {
+  padding: 16px 12px 18px;
+  border-radius: var(--radius-lg);
+  background: var(--card);
+  box-shadow: var(--shadow-card);
+  text-align: center;
+}
+.mt-help {
+  margin-top: 4px;
+  font-size: 15px;
+  color: var(--label-2);
+}
+/* Two columns in one grid, so a word and the meaning beside it always share a row's height. */
+.mt-board {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+  margin-top: 14px;
+}
+.mt-board.sorted { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; }
+.mt-cell {
+  min-height: 56px;
+  padding: 6px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border: 2px solid transparent;
+  border-radius: 12px;
+  background: var(--fill);
+  color: var(--label);
+  font-size: 16px;
+  line-height: 20px;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+  transition: background-color 160ms linear, border-color 160ms linear;
+}
+.mt-cell:active { background: var(--fill-2); }
+.mt-word {
+  font-size: 30px;
+  line-height: 1.15;
+  letter-spacing: 0.04em;
+}
+.mt-word.long { font-size: 24px; }
+.mt-word.sentence { font-size: 19px; letter-spacing: 0; }
+.mt-py { font-size: 14px; line-height: 18px; color: var(--label-2); }
+.mt-cell.selected { border-color: var(--accent); background: var(--accent-tint); }
+.mt-cell.matched { border-color: var(--green); background: var(--green-tint); cursor: default; }
+.mt-cell.wrong { border-color: var(--red); background: var(--red-tint); }
+.mt-cell.missed { border-color: var(--orange); background: var(--orange-tint); }
+.mt-board.sorted .mt-cell { cursor: pointer; }
+.mt-say { align-self: center; flex: none; }

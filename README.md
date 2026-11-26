@@ -61,9 +61,22 @@ characters listed under them) or **All**. Then pick a mode:
   the meaning, the example sentence with the word underlined, and the word's characters.
 - **Pinyin & meaning → Word**: the other way round. Write the characters on paper or picture
   them, then check.
+- **Match the meanings**: up to seven words on the left (handwriting font, no pinyin) and their
+  meanings, shuffled, on the right. Tap a word, then its meaning (or the other way round). A
+  right pair turns green and you hear the word; a wrong pair shakes red and counts as a miss for
+  the one you tapped first. When the board is done, the meanings slide next to their words with
+  the pinyin, and a tap on a word shows how to write it. The words you missed come back at the
+  end on a smaller board.
 - **Pick the characters**: the pinyin and meaning are shown (tap the speaker to hear the word),
   and you pick the right word among four from the same lesson. The wrong ones are chosen to be
   confusable: words that share a character, then words of the same length.
+- **Fill the gap**: a sentence from your list with one word missing, its English under it, and
+  up to eight words of the lesson below. Tap a word to put it in the gap (tap it again to take
+  it back), then **Check**. **Hint** shows the missing word's pinyin and meaning; **Another
+  hint** fades half the wrong words (a hint keeps the word's review date). After Check you see
+  the sentence's pinyin, hear the sentence, and can open the word to see how to write it. The
+  sentences are your list's example sentences (the `= ` lines) and the sentences of a textbook
+  text; a list without any has nothing to fill.
 - **Type the pinyin**: the characters are shown and you type the pinyin. Type the letters
   (nihao), then tap a tone key in the bar just above **Check** (it stays above the keyboard):
   **ā á ǎ à** put the tone on the last syllable you typed, **a** takes it off, **ü** types ü.
